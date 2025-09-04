@@ -1281,19 +1281,39 @@ class QSOFit():
 
         return self.conti_result, self.conti_result_name
 
-    def _L_conti(self, wave, pp, waves=np.array([1350, 3000, 5100])):
-        """
-        Calculate continuum Luminoisity at given waves
-        """
-        waves = np.array(waves)
-        L = np.full(len(waves), -1.0)  # to save the luminosity results
-        valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
-        conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[11:])
-        Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
-        Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
-        L[valid_idx] = np.log10(Llam)
+    # def _L_conti(self, wave, pp, waves=np.array([1350, 3000, 5100])):
+    #     """
+    #     Calculate continuum Luminoisity at given waves
+    #     """
+    #     waves = np.array(waves)
+    #     L = np.full(len(waves), -1.0)  # to save the luminosity results
+    #     valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
+    #     conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[11:])
+    #     Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
+    #     Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
+    #     L[valid_idx] = np.log10(Llam)
 
-        return L
+    #     return L
+
+    def _L_conti(self, wave, pp, waves=np.array([1350, 3000, 5100])):
+            """
+            Calculate continuum Luminoisity at given waves
+            """
+            waves = np.array(waves)
+
+            # Add these lines:
+            minw = np.min([np.min(wave), 2300])
+            maxw = np.max([np.max(wave), 2700])
+            wave = np.linspace(minw, maxw, 2000)  # ensure the waves are within the range of the spectrum
+
+            L = np.full(len(waves), -1.0)  # to save the luminosity results
+            valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
+            conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[11:])
+            Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
+            Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
+            L[valid_idx] = np.log10(Llam)
+
+            return L
 
     def _residuals(self, p, xval, yval, weight, _conti_model):
         """Continual residual function used in lmfit"""
