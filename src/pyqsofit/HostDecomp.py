@@ -347,7 +347,9 @@ class Linear_decomp():
         frac_host_4200 = -1.
         frac_host_5100 = -1.
 
-        ind_f4200 = np.where((self.wave > 4160.) & (self.wave < 4210.), True, False)
+        #ind_f4200 = np.where((self.wave > 4160.) & (self.wave < 4210.), True, False)
+        ind_f4200 = np.where((self.wave > 2450.) & (self.wave < 2550.), True, False)
+
         if np.sum(ind_f4200) > 10:
             frac_host_4200 = np.sum(gal_flux[ind_f4200]) / np.sum(self.flux[ind_f4200])
 
