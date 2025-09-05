@@ -340,20 +340,24 @@ class Linear_decomp():
         qso_par = self.result_params[:self.n_qso]
         gal_par = self.result_params[self.n_qso:]
 
-        qso_flux = self.qso_model(qso_par, self.wave)
-        gal_flux = self.gal_model(gal_par, self.wave)
+        wave_min = np.min([2300, np.min(self.wave) - 200])
+        wave_max = np.max([5300, np.max(self.wave) + 200])
+        wave_eval = np.linspace(wave_min, wave_max, 5000)
+
+        qso_flux = self.qso_model(qso_par, wave_eval)
+        gal_flux = self.gal_model(gal_par, wave_eval)
 
         # Calculate the host galaxy fraction at 4200 and 5100
         frac_host_4200 = -1.
         frac_host_5100 = -1.
 
         #ind_f4200 = np.where((self.wave > 4160.) & (self.wave < 4210.), True, False)
-        ind_f4200 = np.where((self.wave > 2450.) & (self.wave < 2550.), True, False)
+        ind_f4200 = np.where((wave_eval > 2450.) & (wave_eval < 2550.), True, False)
 
         if np.sum(ind_f4200) > 10:
             frac_host_4200 = np.sum(gal_flux[ind_f4200]) / np.sum(self.flux[ind_f4200])
 
-        ind_f5100 = np.where((self.wave > 5080.) & (self.wave < 5130.), True, False)
+        ind_f5100 = np.where((wave_eval > 5080.) & (wave_eval < 5130.), True, False)
         if np.sum(ind_f5100) > 10:
             frac_host_5100 = np.sum(gal_flux[ind_f5100]) / np.sum(self.flux[ind_f5100])
 
