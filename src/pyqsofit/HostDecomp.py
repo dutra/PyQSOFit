@@ -325,45 +325,34 @@ class Linear_decomp():
                                  f'You ask for {n_gal} template, while the maximum number of gal template is {self.n_gal}')
 
     def auto_decomp(self):
-        flux_temp = np.vstack((self.qso_datacube, self.gal_datacube)).T
-
-        # set the bondage of fitting
-        if self.gal_tmp.template_type.lower() == 'pca':
-            bounds = (-np.inf, np.inf)
-        else:
-            bounds = (
-                np.concatenate([-np.ones(self.qso_tmp.n_template) * np.inf, np.zeros(self.gal_tmp.n_template)]),
-                np.concatenate([np.ones(self.qso_tmp.n_template) * np.inf, np.ones(self.gal_tmp.n_template) * np.inf])
-            )
-
-        self.result_params = lsq_linear(flux_temp, self.flux_fit, bounds=bounds)['x']
-        qso_par = self.result_params[:self.n_qso]
-        gal_par = self.result_params[self.n_qso:]
-
-        wave_min = np.min([2300, np.min(self.wave) - 200])
-        wave_max = np.max([5300, np.max(self.wave) + 200])
-        wave_eval = np.linspace(wave_min, wave_max, 5000)
-
-        qso_flux = self.qso_model(qso_par, wave_eval)
-        gal_flux = self.gal_model(gal_par, wave_eval)
-
-        # Calculate the host galaxy fraction at 4200 and 5100
-        frac_host_4200 = -1.
-        frac_host_5100 = -1.
-
-        #ind_f4200 = np.where((self.wave > 4160.) & (self.wave < 4210.), True, False)
-        ind_f4200 = np.where((wave_eval > 2450.) & (wave_eval < 2550.), True, False)
-
-        if np.sum(ind_f4200) > 10:
-            frac_host_4200 = np.sum(gal_flux[ind_f4200]) / np.sum(self.flux[ind_f4200])
-
-        ind_f5100 = np.where((wave_eval > 5080.) & (wave_eval < 5130.), True, False)
-        if np.sum(ind_f5100) > 10:
-            frac_host_5100 = np.sum(gal_flux[ind_f5100]) / np.sum(self.flux[ind_f5100])
-
-        data_cube = np.vstack((self.wave, self.flux, self.err, gal_flux, qso_flux))
-
-        return data_cube, frac_host_4200, frac_host_5100, qso_par, gal_par
+            flux_temp = np.vstack((self.qso_datacube, self.gal_datacube)).T
+            # set the bondage of fitting
+            if self.gal_tmp.template_type.lower() == 'pca':
+                bounds = (-np.inf, np.inf)
+            else:
+                bounds = (
+                    np.concatenate([-np.ones(self.qso_tmp.n_template) * np.inf, np.zeros(self.gal_tmp.n_template)]),
+                    np.concatenate([np.ones(self.qso_tmp.n_template) * np.inf, np.ones(self.gal_tmp.n_template) * np.inf])
+                )
+            self.result_params = lsq_linear(flux_temp, self.flux_fit, bounds=bounds)['x']
+            qso_par = self.result_params[:self.n_qso]
+            gal_par = self.result_params[self.n_qso:]
+            wave_min = np.min([2300, np.min(self.wave) - 200])
+            wave_max = np.max([2700, np.max(self.wave) + 200])
+            wave_eval = np.linspace(wave_min, wave_max, 5000)
+            qso_flux = self.qso_model(qso_par, wave_eval)
+            gal_flux = self.gal_model(gal_par, wave_eval)
+            # Calculate the host galaxy fraction at 4200 and 5100
+            frac_host_4200 = -1.
+            frac_host_5100 = -1.
+            ind_f4200 = np.where((wave_eval > 2450.) & (wave_eval < 2550.), True, False)
+            if np.sum(ind_f4200) > 10:
+                frac_host_4200 = np.sum(gal_flux[ind_f4200]) / np.sum(self.flux[ind_f4200])
+            ind_f5100 = np.where((self.wave > 5080.) & (self.wave < 5130.), True, False)
+            if np.sum(ind_f5100) > 10:
+                frac_host_5100 = np.sum(gal_flux[ind_f5100]) / np.sum(self.flux[ind_f5100])
+            data_cube = np.vstack((self.wave, self.flux, self.err, gal_flux, qso_flux))
+            return data_cube, frac_host_4200, frac_host_5100, qso_par, gal_par
 
     def qso_model(self, param: list = None, wave=None):
         if param is None:
