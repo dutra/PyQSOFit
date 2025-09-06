@@ -2101,9 +2101,22 @@ class QSOFit():
                 r = self.line_flux - self.f_line_model
                 mad = median_abs_deviation(r[mask_complex], scale='normal')  # MAD of noise
                 mask_outliers = np.where(r < 3 * mad, True, False)
-                f_max = np.max(self.line_flux[mask_complex & mask_outliers])
-                # f_min = np.min([-1, np.min(self.line_flux[mask_complex & mask_outliers])])
-                f_min = np.min([-1, -3 * mad])
+                vals = self.line_flux[mask_complex & mask_outliers]
+                if vals.size == 0:
+                    # fallback: just use all points in the complex
+                    vals = self.line_flux[mask_complex]
+                if vals.size == 0:
+                    # absolute fallback if still empty
+                    f_max = 1.0
+                else:
+                    f_max = np.max(vals)                
+                vals = self.line_flux[mask_complex & mask_outliers]
+                if vals.size == 0:
+                    vals = self.line_flux[mask_complex]
+                if vals.size == 0:
+                    f_min = -1.0
+                else:
+                    f_min = np.min(vals)
 
                 if ylims is None:
                     axn[1][c].set_ylim(f_min * 0.9, f_max * 1.1)

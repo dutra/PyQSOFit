@@ -54,11 +54,13 @@ class QSO_PCA():
         flux_in = self.flux_qso
         wave_exp = np.array(wave_exp, dtype='float64')
         # c0 = const.c.to(u.km / u.s).value
-
-        if np.max(wave_in) <= np.max(wave_exp) or np.min(wave_in) >= np.min(wave_exp):
-            raise ValueError(f'The length of template is not long enough to cover the wave range you give. '
-                             f'The range of template is [{np.min(wave_in)}, {np.max(wave_in)}], while the '
-                             f'range of wave input is [{np.min(wave_exp)}, {np.max(wave_exp)}]')
+        wave_exp = np.clip(wave_exp, np.min(wave_in), np.max(wave_in))
+        if (np.max(wave_in) < np.max(wave_exp) - 1e-3) or (np.min(wave_in) > np.min(wave_exp) + 1e-3):
+            raise ValueError(
+                f'The length of template is not long enough to cover the wave range you give. '
+                f'The range of template is [{np.min(wave_in)}, {np.max(wave_in)}], while the '
+                f'range of wave input is [{np.min(wave_exp)}, {np.max(wave_exp)}]'
+            )
 
         if np.ndim(flux_in) == 1:
             f_flux = interp1d(wave_in, flux_in, bounds_error=False, fill_value=0)
@@ -234,7 +236,8 @@ class host_template():
             else:
                 wave_in = wave_in / (1 + sigma / c0)
 
-        if np.max(wave_in) <= np.max(wave_exp) or np.min(wave_in) >= np.min(wave_exp):
+        wave_exp = np.clip(wave_exp, np.min(wave_in), np.max(wave_in))
+        if (np.max(wave_in) <= np.max(wave_exp) - 1e-3) or (np.min(wave_in) >= np.min(wave_exp) + 1e-3):
             raise ValueError(f'The length of template is not long enough to cover the wave range you give. '
                              f'The range of template is [{np.min(wave_in)}, {np.max(wave_in)}], while the '
                              f'range of wave input is [{np.min(wave_exp)}, {np.max(wave_exp)}]')
@@ -337,8 +340,12 @@ class Linear_decomp():
         self.result_params = lsq_linear(flux_temp, self.flux_fit, bounds=bounds)['x']
         qso_par = self.result_params[:self.n_qso]
         gal_par = self.result_params[self.n_qso:]
+        
         wave_min = np.min([2300, np.min(self.wave) - 200])
-        wave_max = np.max(self.wave)
+        wave_min = np.max([wave_min, np.min(self.qso_tmp.wave_qso)])
+        wave_max = np.max([5200, np.max(self.wave + 200)])
+        wave_max = np.min([wave_max, np.max(self.qso_tmp.wave_qso)])
+
         wave_eval = np.linspace(wave_min, wave_max, 5000)
         qso_flux_extrap = self.qso_model(qso_par, wave_eval)
         gal_flux_extrap = self.gal_model(gal_par, wave_eval)
@@ -350,6 +357,8 @@ class Linear_decomp():
         ind_f4200 = np.where((wave_eval > 2450.) & (wave_eval < 2550.), True, False)
         if np.sum(ind_f4200) > 10:
             frac_host_4200 = np.sum(gal_flux_extrap[ind_f4200]) / np.sum((gal_flux_extrap + qso_flux_extrap)[ind_f4200])
+        else:
+            raise ValueError('Not enough data points for host fraction calculation')
         ind_f5100 = np.where((self.wave > 5080.) & (self.wave < 5130.), True, False)
         if np.sum(ind_f5100) > 10:
             frac_host_5100 = np.sum(gal_flux[ind_f5100]) / np.sum(self.flux[ind_f5100])
