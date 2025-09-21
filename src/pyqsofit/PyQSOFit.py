@@ -973,9 +973,9 @@ class QSOFit():
                        vary=bool(contilist[11]['vary']))
         # polynomial for the continuum f = a_0 x^0 + a_1 x^1 + a_2 x^2 + ...
         # XXX Bounds have to be None so lmfit will select them automatically to avoid numerical problems
-        fit_params.add('conti_a_0', value=pp0[12], min=None, max=None, vary=bool(contilist[12]['vary']))
-        fit_params.add('conti_a_1', value=pp0[13], min=None, max=None, vary=bool(contilist[13]['vary']))
-        fit_params.add('conti_a_2', value=pp0[14], min=None, max=None, vary=bool(contilist[14]['vary']))
+        fit_params.add('conti_a_0', value=pp0[12], min=contilist[12]['min'], max=contilist[12]['max'], vary=bool(contilist[12]['vary']))
+        fit_params.add('conti_a_1', value=pp0[13], min=contilist[13]['min'], max=contilist[13]['max'], vary=bool(contilist[13]['vary']))
+        fit_params.add('conti_a_2', value=pp0[14], min=contilist[14]['min'], max=contilist[14]['max'], vary=bool(contilist[14]['vary']))
 
         # Check if we will attempt to fit the UV FeII continuum region
         ind_uv = np.where((wave[tmp_all] > 1200) & (wave[tmp_all] < 3500), True, False)
@@ -2273,7 +2273,10 @@ class QSOFit():
                                                                                                        pp[8:12]), 'y',
                     lw=2, label='BC', zorder=8)
 
+        print(self.F_poly_conti(wave_eval, pp[12:]))
         ax.plot(wave_eval, self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[12:]), color='orange', lw=2,
+                label='reddened conti', zorder=9)
+        ax.plot(wave_eval, self.PL(wave_eval, pp), color='yellow', lw=2,
                 label='conti', zorder=9)
 
         # Axis limits
@@ -2478,16 +2481,42 @@ class QSOFit():
         return bc_final * 1e-17
 
     def F_poly_conti(self, xval, pp, x0=3000):
-        """Fit the continuum with a polynomial component account for the dust reddening with a*X+b*X^2+c*X^3
-        
-        TODO: See if LMFIT's built-in modeles improved performance and numerical stability
-        https://lmfit.github.io/lmfit-py/builtin_models.html
-        
         """
-        xval2 = xval - x0
+        Fit the continuum with a polynomial component accounting for dust reddening.
+        Ensures the output is negative everywhere.
+        """
+        #xval2 = xval - x0
         # rescale pp for numerical precision
-        yvals = [(pp[i] / 1e6) * xval2 ** (i + 1) for i in range(len(pp))]
-        return np.sum(yvals, axis=0)
+        #yvals = [(pp[i]) * xval2 ** (i + 1) for i in range(len(pp))]
+        #poly = np.sum(yvals, axis=0)
+        #return poly
+
+        from numpy.polynomial import polynomial as P
+
+        # Dimensionless coordinate centered at pivot (same as your original poly)
+        T = (xval - float(x0)) / float(x0)
+
+        # Amplitude at the pivot (≥ 0 so attenuation can't flip sign)
+        amp_raw = float(pp[0])
+        A0 = amp_raw if amp_raw > 20.0 else np.log1p(np.exp(amp_raw))  # softplus
+
+        # Curvature controller: Q(T) = Σ b_j T^j  (unconstrained b_j)
+        b = np.array([float(v) for v in pp[1:]], dtype=float)
+
+        if b.size == 0:
+            A = np.full_like(T, A0)
+        else:
+            # Enforce dA/dT = -[Q(T)]^2 ≤ 0  ⇒ A(T) = A0 - ∫_0^T [Q(u)]^2 du
+            Q2 = P.polymul(b, b)   # coefficients of Q^2 ≥ 0
+            Int = P.polyint(Q2)    # indefinite integral; const=0 ⇒ integral from 0
+            I_T = P.polyval(T, Int)
+            A = A0 - I_T
+
+        # Physical floor: extinction can't be negative
+        A = np.clip(A, 0.0, np.inf)
+        
+        # Return NEGATIVE attenuation
+        return -A
 
     def flux2L(self, flux, z=None):
         """Transfer flux to luminoity assuming a flat Universe"""
