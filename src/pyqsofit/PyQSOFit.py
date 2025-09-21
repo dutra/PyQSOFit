@@ -1174,11 +1174,14 @@ class QSOFit():
 
             # Calculate continuum luminosity errors
             Ls = np.empty((np.shape(samples)[0], len(self.L_conti_wave)))
+            Ls_int = np.empty((np.shape(samples)[0], len(self.L_conti_wave)))
             # Samples loop
             for k, s in enumerate(samples):
-                Ls[k] = self._L_conti(wave, s, self.L_conti_wave)
+                Ls[k] = self._L_conti(wave, s, self.L_conti_wave) # include internal reddening polynomial
+                Ls_int[k] = self._L_conti(wave, s, self.L_conti_wave, poly=False)
 
             L_std = get_err(Ls)
+            L_int_std = get_err(Ls_int)
 
             # Calculate FeII flux errors
             Fe_flux_results = np.empty((len(samples), np.shape(np.ravel(self.Fe_flux_range))[0] // 2))
@@ -1195,6 +1198,7 @@ class QSOFit():
             # Point estimates
             # Calculate continuum luminosities
             L = self._L_conti(wave, params, self.L_conti_wave)
+            L_int = self._L_conti(wave, params, self.L_conti_wave, poly=False)
 
             # Calculate FeII flux
             Fe_flux_result, Fe_flux_type, Fe_flux_name = self.Get_Fe_flux(self.Fe_flux_range, params[:6])
@@ -1223,6 +1227,15 @@ class QSOFit():
             self.conti_result_name = np.append(self.conti_result_name,
                                                list(chain.from_iterable(zip(L_names, L_err_names))))
 
+            # intrinsic (without reddening polynomial) continuum luminosities
+            self.conti_result = np.append(self.conti_result, list(chain.from_iterable(zip(L_int, L_int_std))))
+            self.conti_result_type = np.append(self.conti_result_type, ['float'] * (len(L_int) * 2))
+            L_int_names = [f'L{int(lam):d}_int' for lam in self.L_conti_wave]
+            L_int_err_names = [f'L{int(lam):d}_int_err' for lam in self.L_conti_wave]
+            self.conti_result_name = np.append(self.conti_result_name,
+                                               list(chain.from_iterable(zip(L_int_names, L_int_err_names))))    
+
+            # Fe II parameters
             Fe_flux_err_name = [n + '_err' for n in Fe_flux_name]
             self.conti_result = np.append(self.conti_result,
                                           list(chain.from_iterable(zip(Fe_flux_result, Fe_flux_std))))
@@ -1239,6 +1252,7 @@ class QSOFit():
             # Point estimates
             # Calculate continuum luminosities
             L = self._L_conti(wave, params, self.L_conti_wave)
+            L_int = self._L_conti(wave, params, self.L_conti_wave, poly=False)
 
             # Calculate FeII flux
             Fe_flux_result, Fe_flux_type, Fe_flux_name = self.Get_Fe_flux(self.Fe_flux_range, params[:6])
@@ -1259,6 +1273,11 @@ class QSOFit():
             self.conti_result = np.append(self.conti_result, L)
             self.conti_result_type = np.append(self.conti_result_type, ['float'] * len(L))
             self.conti_result_name = np.append(self.conti_result_name, [f'L{int(lam):d}' for lam in self.L_conti_wave])
+
+            # intrinsic (without reddening polynomial) continuum luminosities
+            self.conti_result = np.append(self.conti_result, L_int)
+            self.conti_result_type = np.append(self.conti_result_type, ['float'] * len(L_int))
+            self.conti_result_name = np.append(self.conti_result_name, [f'L{int(lam):d}_int' for lam in self.L_conti_wave])
 
             self.conti_result = np.append(self.conti_result, Fe_flux_result)
             self.conti_result_type = np.append(self.conti_result_type, Fe_flux_type)
@@ -1298,7 +1317,7 @@ class QSOFit():
 
     #     return L
 
-    def _L_conti(self, wave, pp, waves=np.array([1350, 3000, 5100])):
+    def _L_conti(self, wave, pp, waves=np.array([1350, 3000, 5100]), poly=True):
             """
             Calculate continuum Luminoisity at given waves
             """
@@ -1311,7 +1330,10 @@ class QSOFit():
 
             L = np.full(len(waves), -1.0)  # to save the luminosity results
             valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
-            conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[12:])
+            if poly == True:
+                conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[12:])
+            else:
+                conti_flux = self.PL(waves[valid_idx], pp)
             Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
             Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
             L[valid_idx] = np.log10(Llam)
@@ -2488,7 +2510,7 @@ class QSOFit():
         #xval2 = xval - x0
         # rescale pp for numerical precision
         #yvals = [(pp[i]) * xval2 ** (i + 1) for i in range(len(pp))]
-        #poly = np.sum(yvals, axis=0)
+        #poly = np.sum(yvals, axis=0) * 100
         #return poly
 
         from numpy.polynomial import polynomial as P
