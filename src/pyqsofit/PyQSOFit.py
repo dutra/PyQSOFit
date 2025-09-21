@@ -969,11 +969,13 @@ class QSOFit():
                        vary=bool(contilist[9]['vary']))
         fit_params.add('Balmer_Tau', value=pp0[10], min=contilist[10]['min'], max=contilist[10]['max'],
                        vary=bool(contilist[10]['vary']))
-        # polynomial for the continuum f = a_0 x^0 + a_1 x^1 + a_2 x^2 + ... 
+        fit_params.add('Balmer_vel', value=pp0[11], min=contilist[11]['min'], max=contilist[11]['max'],
+                       vary=bool(contilist[11]['vary']))
+        # polynomial for the continuum f = a_0 x^0 + a_1 x^1 + a_2 x^2 + ...
         # XXX Bounds have to be None so lmfit will select them automatically to avoid numerical problems
-        fit_params.add('conti_a_0', value=pp0[11], min=None, max=None, vary=bool(contilist[11]['vary']))
-        fit_params.add('conti_a_1', value=pp0[12], min=None, max=None, vary=bool(contilist[12]['vary']))
-        fit_params.add('conti_a_2', value=pp0[13], min=None, max=None, vary=bool(contilist[13]['vary']))
+        fit_params.add('conti_a_0', value=pp0[12], min=None, max=None, vary=bool(contilist[12]['vary']))
+        fit_params.add('conti_a_1', value=pp0[13], min=None, max=None, vary=bool(contilist[13]['vary']))
+        fit_params.add('conti_a_2', value=pp0[14], min=None, max=None, vary=bool(contilist[14]['vary']))
 
         # Check if we will attempt to fit the UV FeII continuum region
         ind_uv = np.where((wave[tmp_all] > 1200) & (wave[tmp_all] < 3500), True, False)
@@ -998,6 +1000,7 @@ class QSOFit():
             fit_params['Blamer_norm'].vary = False
             fit_params['Balmer_Te'].vary = False
             fit_params['Balmer_Tau'].vary = False
+            fit_params['Balmer_vel'].vary = False
 
         # Check if we will fit the polynomial component
         if self.poly == False:
@@ -1016,8 +1019,8 @@ class QSOFit():
          pp[3:5]: same as pp[0:2] but for the Hbeta/Halpha Fe template
          pp[6]: norm_factor for continuum f_lambda = (lambda/3000.0)^{-alpha}
          pp[7]: slope for the power-law continuum
-         pp[8:10]: norm, Te and Tau_e for the Balmer continuum at <3646 A
-         pp[11:13]: polynomial for the continuum
+         pp[8:12]: norm, Te and Tau_e for the Balmer continuum at <3646 A
+         pp[12:14]: polynomial for the continuum
         """
 
         # Get continuum model ahead of time and pass it to the residuals function
@@ -1026,22 +1029,22 @@ class QSOFit():
                 xval, pp[3:6])
         elif self.Fe_uv_op == True and self.poly == True and self.BC == False:
             _conti_model = lambda xval, pp: self.PL(xval, pp) + self.Fe_flux_mgii(xval, pp[0:3]) + self.Fe_flux_balmer(
-                xval, pp[3:6]) + self.F_poly_conti(xval, pp[11:])
+                xval, pp[3:6]) + self.F_poly_conti(xval, pp[12:])
         elif self.Fe_uv_op == True and self.poly == False and self.BC == True:
             _conti_model = lambda xval, pp: self.PL(xval, pp) + self.Fe_flux_mgii(xval, pp[0:3]) + self.Fe_flux_balmer(
-                xval, pp[3:6]) + self.Balmer_conti(xval, pp[8:11])
+                xval, pp[3:6]) + self.Balmer_conti(xval, pp[8:12])
         elif self.Fe_uv_op == False and self.poly == True and self.BC == False:
-            _conti_model = lambda xval, pp: self.PL(xval, pp) + self.F_poly_conti(xval, pp[11:])
+            _conti_model = lambda xval, pp: self.PL(xval, pp) + self.F_poly_conti(xval, pp[12:])
         elif self.Fe_uv_op == False and self.poly == False and self.BC == False:
             _conti_model = lambda xval, pp: self.PL(xval, pp)
         elif self.Fe_uv_op == False and self.poly == False and self.BC == True:
-            _conti_model = lambda xval, pp: self.PL(xval, pp) + self.Balmer_conti(xval, pp[8:11])
+            _conti_model = lambda xval, pp: self.PL(xval, pp) + self.Balmer_conti(xval, pp[8:12])
         elif self.Fe_uv_op == True and self.poly == True and self.BC == True:
             _conti_model = lambda xval, pp: self.PL(xval, pp) + self.Fe_flux_mgii(xval, pp[0:3]) + self.Fe_flux_balmer(
-                xval, pp[3:6]) + self.F_poly_conti(xval, pp[11:]) + self.Balmer_conti(xval, pp[8:11])
+                xval, pp[3:6]) + self.F_poly_conti(xval, pp[12:]) + self.Balmer_conti(xval, pp[8:12])
         elif self.Fe_uv_op == False and self.poly == True and self.BC == True:
             _conti_model = lambda xval, pp: self.PL(xval, pp) + self.Fe_flux_balmer(xval, pp[3:6]) + self.F_poly_conti(
-                xval, pp[11:]) + self.Balmer_conti(xval, pp[8:11])
+                xval, pp[12:]) + self.Balmer_conti(xval, pp[8:12])
         else:
             raise RuntimeError('Invalid options for continuum model!')
 
@@ -1068,7 +1071,7 @@ class QSOFit():
         # Calculate the continuum fit and mask the absorption lines before re-fitting
         if self.rej_abs_conti == True:
             if self.poly == True:
-                tmp_conti = self.PL(wave[tmp_all], params) + self.F_poly_conti(wave[tmp_all], params[11:])
+                tmp_conti = self.PL(wave[tmp_all], params) + self.F_poly_conti(wave[tmp_all], params[12:])
             else:
                 tmp_conti = self.PL(wave[tmp_all], params)
 
@@ -1273,8 +1276,8 @@ class QSOFit():
         self.f_fe_mgii_model = self.Fe_flux_mgii(wave, params[0:3])
         self.f_fe_balmer_model = self.Fe_flux_balmer(wave, params[3:6])
         self.f_pl_model = self.PL(wave, params)
-        self.f_bc_model = self.Balmer_conti(wave, params[8:11])
-        self.f_poly_model = self.F_poly_conti(wave, params[11:])
+        self.f_bc_model = self.Balmer_conti(wave, params[8:12])
+        self.f_poly_model = self.F_poly_conti(wave, params[12:])
         self.f_conti_model = self.f_pl_model + self.f_fe_mgii_model + self.f_fe_balmer_model + self.f_poly_model + self.f_bc_model
         self.line_flux = flux - self.f_conti_model
         self.PL_poly_BC = self.f_pl_model + self.f_poly_model + self.f_bc_model
@@ -1288,7 +1291,7 @@ class QSOFit():
     #     waves = np.array(waves)
     #     L = np.full(len(waves), -1.0)  # to save the luminosity results
     #     valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
-    #     conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[11:])
+    #     conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[12:])
     #     Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
     #     Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
     #     L[valid_idx] = np.log10(Llam)
@@ -1308,7 +1311,7 @@ class QSOFit():
 
             L = np.full(len(waves), -1.0)  # to save the luminosity results
             valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
-            conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[11:])
+            conti_flux = self.PL(waves[valid_idx], pp) + self.F_poly_conti(waves[valid_idx], pp[12:])
             Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
             Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
             L[valid_idx] = np.log10(Llam)
@@ -1910,7 +1913,7 @@ class QSOFit():
 
             # Use the continuum model to avoid the inf bug of EW when the spectrum range passed in is too short
             contiflux = self.PL(np.exp(xx), self.conti_params) + self.F_poly_conti(
-                np.exp(xx), self.conti_params[11:]) + self.Balmer_conti(np.exp(xx), self.conti_params[8:11])
+                np.exp(xx), self.conti_params[12:]) + self.Balmer_conti(np.exp(xx), self.conti_params[8:12])
 
             # Find the line peak location
             ypeak = yy_br.max()
@@ -2031,7 +2034,7 @@ class QSOFit():
 
         wave_eval = np.linspace(np.min(self.wave) - 200, np.max(self.wave) + 200, 5000)
         f_conti_model_eval = self.PL(wave_eval, pp) + self.Fe_flux_mgii(wave_eval, pp[0:3]) + self.Fe_flux_balmer(
-            wave_eval, pp[3:6]) + self.F_poly_conti(wave_eval, pp[11:]) + self.Balmer_conti(wave_eval, pp[8:11])
+            wave_eval, pp[3:6]) + self.F_poly_conti(wave_eval, pp[12:]) + self.Balmer_conti(wave_eval, pp[8:12])
 
         # Plot lines
         if (self.linefit == True) & (len(self.line_result) > 0):
@@ -2266,11 +2269,11 @@ class QSOFit():
 
         if self.BC == True:
             ax.plot(wave_eval,
-                    self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[11:]) + self.Balmer_conti(wave_eval,
-                                                                                                       pp[8:11]), 'y',
+                    self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[12:]) + self.Balmer_conti(wave_eval,
+                                                                                                       pp[8:12]), 'y',
                     lw=2, label='BC', zorder=8)
 
-        ax.plot(wave_eval, self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[11:]), color='orange', lw=2,
+        ax.plot(wave_eval, self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[12:]), color='orange', lw=2,
                 label='conti', zorder=9)
 
         # Axis limits
@@ -2416,19 +2419,63 @@ class QSOFit():
         return pp[6] * (xval / x0) ** pp[7]
 
     def Balmer_conti(self, xval, pp):
-        """Fit the Balmer continuum from the model of Dietrich+02"""
-        # xval = input wavelength, in units of A
-        # pp=[norm, Te, tau_BE] -- in units of [--, K, --]
-        xval = xval * u.AA
-        lambda_BE = 3646.  # A
-        bb_lam = BlackBody(pp[1] * u.K, scale=1.0 * u.erg / (u.cm ** 2 * u.AA * u.s * u.sr))
-        bbflux = bb_lam(xval).value * 3.14  # in units of ergs/cm2/s/A
-        tau = pp[2] * (xval.value / lambda_BE) ** 3
-        result = pp[0] * bbflux * (1 - np.exp(-tau))
-        ind = np.where(xval.value > lambda_BE, True, False)
-        if ind.any() == True:
-            result[ind] = 0
-        return result
+        """
+        Balmer continuum (Dietrich+02) for rest-frame wavelengths.
+        Convolution is performed in log-lambda space.
+        """
+        x = np.asarray(xval, dtype=float)
+        norm, Te, tau_BE = float(pp[0]), float(pp[1]), float(pp[2])
+
+        lam_BE = 3646.0  # Å, rest-frame Balmer edge
+
+        # Planck B_lambda in erg s^-1 cm^-2 Å^-1 sr^-1
+        h  = 6.62607015e-27   # erg s
+        c  = 2.99792458e10    # cm / s
+        kB = 1.380649e-16     # erg / K
+        lam_cm = x * 1e-8
+        expo = (h * c) / (lam_cm * kB * Te)
+        expo = np.clip(expo, 1e-9, 700.0)  # numerical safety
+        B_per_cm = (2.0 * h * c**2 / lam_cm**5) / np.expm1(expo)  # per cm
+        B_per_A  = B_per_cm * 1e-8                                   # per Å
+        bbflux   = B_per_A * np.pi                                   # integrate over angles
+
+        # Dietrich+02 optical-depth law, only blueward of the edge
+        tau = tau_BE * (x / lam_BE)**3
+        bc  = norm * bbflux * (1.0 - np.exp(-tau))
+
+        # Zero flux redward of the Balmer edge
+        bc[x > lam_BE] = 0.0
+
+        # --- Convolve in log-lambda space ---
+        loglam = np.log(x)
+        # Make a uniform log-lam grid
+        loglam_uniform = np.linspace(loglam.min(), loglam.max(), len(loglam))
+        # Interpolate bc onto uniform log-lam grid
+        bc_uniform = np.interp(loglam_uniform, loglam, bc)
+
+        # Kernel width in log-lam
+        v_broad_kms = float(pp[3])
+        c_kms = 2.99792458e5
+        sigma_loglam = (v_broad_kms / c_kms)  # since d(loglam) ~ d(v)/c
+
+        dloglam = np.median(np.diff(loglam_uniform))
+        half = int(np.ceil(5.0 * sigma_loglam / dloglam))
+        g = np.arange(-half, half+1) * dloglam
+        ker = np.exp(-0.5*(g/sigma_loglam)**2)
+        ker /= ker.sum()
+
+        # Truncate kernel if longer than data
+        if len(ker) > len(bc_uniform):
+            extra = len(ker) - len(bc_uniform)
+            ker = ker[extra//2:-(extra-extra//2)]
+
+        # Convolve
+        bc_conv = np.convolve(bc_uniform, ker, mode="same")
+
+        # Interpolate back to original x grid
+        bc_final = np.interp(loglam, loglam_uniform, bc_conv)
+
+        return bc_final * 1e-17
 
     def F_poly_conti(self, xval, pp, x0=3000):
         """Fit the continuum with a polynomial component account for the dust reddening with a*X+b*X^2+c*X^3
