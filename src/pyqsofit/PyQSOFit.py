@@ -2295,7 +2295,6 @@ class QSOFit():
                                                                                                        pp[8:12]), 'y',
                     lw=2, label='BC', zorder=8)
 
-        print(self.F_poly_conti(wave_eval, pp[12:]))
         ax.plot(wave_eval, self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[12:]), color='orange', lw=2,
                 label='reddened conti', zorder=9)
         ax.plot(wave_eval, self.PL(wave_eval, pp), color='yellow', lw=2,
