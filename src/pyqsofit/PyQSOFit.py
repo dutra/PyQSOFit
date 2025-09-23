@@ -165,6 +165,53 @@ class QSOFit():
         self.path = path
         self.install_path = os.path.dirname(os.path.abspath(__file__))
         self.output_path = path
+    def _k_lambda_ccm89(self, wave, R_V=3.1):
+        """
+        Cardelli, Clayton & Mathis (1989) + O'Donnell (1994) optical update.
+        wave : Angstrom (rest-frame)
+        Returns k(λ) = A(λ) / E(B-V)
+        Valid for ~0.1 <= x <= 10 micron^-1 (λ from 1000 Å to 10 micron), with UV extension.
+        """
+        wl = np.asarray(wave, dtype=float) * 1e-4          # convert Å -> micron
+        x = 1.0 / wl                                       # inverse micron
+        k = np.zeros_like(x)
+
+        # Infrared: 0.3 <= x < 1.1
+        m = (x >= 0.3) & (x < 1.1)
+        if np.any(m):
+            a = 0.574 * x[m]**1.61
+            b = -0.527 * x[m]**1.61
+            k[m] = a * R_V + b
+
+        # Optical/NIR (O'Donnell 1994): 1.1 <= x < 3.3
+        m = (x >= 1.1) & (x < 3.3)
+        if np.any(m):
+            y = x[m] - 1.82
+            a = ( 1.0
+                  + 0.17699*y - 0.50447*y**2 - 0.02427*y**3
+                  + 0.72085*y**4 + 0.01979*y**5
+                  - 0.77530*y**6 + 0.32999*y**7 )
+            b = ( 1.41338*y + 2.28305*y**2 + 1.07233*y**3
+                  - 5.38434*y**4 - 0.62251*y**5
+                  + 5.30260*y**6 - 2.09002*y**7 )
+            k[m] = a * R_V + b
+
+        # UV: 3.3 <= x <= 8.0 (CCM89 with far-UV term)
+        m = (x >= 3.3) & (x <= 8.0)
+        if np.any(m):
+            xm = x[m]
+            a = 1.752 - 0.316*xm - 0.104 / ((xm - 4.67)**2 + 0.341)
+            b = -3.090 + 1.825*xm + 1.206 / ((xm - 4.62)**2 + 0.263)
+            # Far-UV correction for x >= 5.9
+            mf = xm >= 5.9
+            if np.any(mf):
+                dxa = -0.04473*(xm[mf]-5.9)**2 - 0.009779*(xm[mf]-5.9)**3
+                dxb =  0.2130 *(xm[mf]-5.9)**2 + 0.1207  *(xm[mf]-5.9)**3
+                a[m][mf] = a[m][mf] + dxa
+                b[m][mf] = b[m][mf] + dxb
+            k[m] = a * R_V + b
+
+        return k
 
     def Fit(self, name=None, nsmooth=1, and_mask=False, or_mask=False, reject_badpix=True, deredden=True,
             wave_range=None,
@@ -1300,6 +1347,24 @@ class QSOFit():
         self.f_conti_model = self.f_pl_model + self.f_fe_mgii_model + self.f_fe_balmer_model + self.f_poly_model + self.f_bc_model
         self.line_flux = flux - self.f_conti_model
         self.PL_poly_BC = self.f_pl_model + self.f_poly_model + self.f_bc_model
+
+        # --- E(B-V) from full curve (reddened vs. intrinsic) ---
+        reddened_cont = self.f_pl_model + self.f_poly_model          # PL + reddening poly
+        intrinsic_cont = self.f_pl_model                              # PL only (dereddened)
+
+        # compute_EBV is your function that uses wave + both curves
+        EBV_value, meta = self.compute_EBV(wave, self.conti_params, R_V=3.1)
+
+        # push into the “continuum result” vectors so it’s saved like other conti metrics
+        self.conti_result = np.append(self.conti_result, [EBV_value])
+        self.conti_result_type = np.append(self.conti_result_type, ['float'])
+        self.conti_result_name = np.append(self.conti_result_name, ['EBV'])
+
+        EBV_quick, _ = self.compute_EBV_quick(wave, self.conti_params)
+        self.conti_result      = np.append(self.conti_result,      [EBV_quick])
+        self.conti_result_type = np.append(self.conti_result_type, ['float'])
+        self.conti_result_name = np.append(self.conti_result_name, ['EBV_quick'])
+
 
         return self.conti_result, self.conti_result_name
 
@@ -2710,6 +2775,208 @@ class QSOFit():
         self.L_conti_wave = np.array(data['cont_loc'][0])
 
         return data
+    
+    def _k_lambda_ccm89(self, wave, R_V=3.1):
+        """
+        Cardelli, Clayton & Mathis (1989) with O'Donnell (1994) optical update.
+        Inputs
+        -------
+        wave : array-like
+            Rest-frame wavelength in Angstrom.
+        R_V : float
+            Total-to-selective extinction ratio (default 3.1).
+
+        Returns
+        -------
+        k_lambda : ndarray
+            k(λ) = A(λ) / E(B-V) evaluated at `wave`.
+        """
+        wl_um = np.asarray(wave, dtype=float) * 1e-4   # Å -> μm
+        x = 1.0 / wl_um                                # inverse μm
+        k = np.zeros_like(x, dtype=float)
+
+        # --- IR: 0.3 <= x < 1.1 ---
+        m = (x >= 0.3) & (x < 1.1)
+        if np.any(m):
+            x_m = x[m]
+            a = 0.574 * x_m**1.61
+            b = -0.527 * x_m**1.61
+            k[m] = a * R_V + b
+
+        # --- Optical/NIR (O'Donnell 1994): 1.1 <= x < 3.3 ---
+        m = (x >= 1.1) & (x < 3.3)
+        if np.any(m):
+            y = x[m] - 1.82
+            a = (1.0
+                + 0.17699*y - 0.50447*y**2 - 0.02427*y**3
+                + 0.72085*y**4 + 0.01979*y**5
+                - 0.77530*y**6 + 0.32999*y**7)
+            b = (1.41338*y + 2.28305*y**2 + 1.07233*y**3
+                - 5.38434*y**4 - 0.62251*y**5
+                + 5.30260*y**6 - 2.09002*y**7)
+            k[m] = a * R_V + b
+
+        # --- UV: 3.3 <= x <= 8.0 (CCM89 with far-UV correction) ---
+        m = (x >= 3.3) & (x <= 8.0)
+        if np.any(m):
+            xm = x[m]
+            a = 1.752 - 0.316*xm - 0.104 / ((xm - 4.67)**2 + 0.341)
+            b = -3.090 + 1.825*xm + 1.206 / ((xm - 4.62)**2 + 0.263)
+
+            # Far-UV correction for xm >= 5.9 (index within the sliced arrays!)
+            mf = xm >= 5.9
+            if np.any(mf):
+                dxa = -0.04473*(xm[mf] - 5.9)**2 - 0.009779*(xm[mf] - 5.9)**3
+                dxb =  0.2130 *(xm[mf] - 5.9)**2 + 0.1207  *(xm[mf] - 5.9)**3
+                a[mf] = a[mf] + dxa
+                b[mf] = b[mf] + dxb
+
+            k[m] = a * R_V + b
+
+        return k
+
+
+    def compute_EBV(self, wave_eval, pp, *, R_V=3.1, weights=None, mask=None, return_meta=True):
+        """
+        Estimate E(B-V) by fitting A(λ) from the full curve to CCM89 k(λ).
+        wave_eval : array of rest-frame wavelengths (Å) on which to evaluate the continua
+        pp        : continuum parameter vector used elsewhere in PyQSOFit
+        R_V       : total-to-selective ratio (default 3.1)
+        weights   : optional per-pixel weights (e.g., 1/err^2). If None, unweighted fit.
+        mask      : optional boolean mask; True=keep. If None, auto mask to finite & positive flux.
+        return_meta : if True, also return dict with arrays for QA.
+        Returns
+        -------
+        E_BV  (float)
+        meta  (dict) with { 'wave','A_lambda','k_lambda','valid','A_B','A_V' } if return_meta
+        """
+        wave_eval = np.asarray(wave_eval, dtype=float)
+
+        # Build reddened and intrinsic continua
+        F_int = self.PL(wave_eval, pp)
+        F_red = self.PL(wave_eval, pp) + self.F_poly_conti(wave_eval, pp[12:])
+
+        # Valid pixels: finite, positive fluxes, and finite k(λ)
+        k_lambda = self._k_lambda_ccm89(wave_eval, R_V=R_V)
+        valid = np.isfinite(F_int) & np.isfinite(F_red) & (F_int > 0) & (F_red > 0) & np.isfinite(k_lambda) & (k_lambda > 0)
+
+        if mask is not None:
+            valid &= np.asarray(mask, dtype=bool)
+
+        if not np.any(valid):
+            raise ValueError("No valid wavelengths to compute E(B-V).")
+
+        # A_lambda from the two curves
+        A_lambda = -2.5 * np.log10(F_red[valid] / F_int[valid])
+        k = k_lambda[valid]
+
+        # Least-squares fit for E(B-V)
+        if weights is None:
+            num = np.sum(k * A_lambda)
+            den = np.sum(k * k)
+        else:
+            w = np.asarray(weights, dtype=float)
+            if w.shape != wave_eval.shape:
+                raise ValueError("weights must have the same shape as wave_eval")
+            wv = w[valid]
+            num = np.sum(wv * k * A_lambda)
+            den = np.sum(wv * k * k)
+
+        E_BV = num / den if den > 0 else 0.0
+
+        if not return_meta:
+            return E_BV
+
+        # Optional synthetic A_B and A_V by interpolation (sanity check only; not used in the fit)
+        try:
+            A_lambda_full = -2.5 * np.log10(F_red / F_int)
+            A_B = np.interp(4400.0, wave_eval[valid], A_lambda, left=np.nan, right=np.nan)
+            A_V = np.interp(5500.0, wave_eval[valid], A_lambda, left=np.nan, right=np.nan)
+        except Exception:
+            A_B, A_V = np.nan, np.nan
+
+        meta = dict(
+            wave=wave_eval[valid],
+            A_lambda=A_lambda,
+            k_lambda=k,
+            valid=valid,
+            A_B=A_B,
+            A_V=A_V,
+        )
+        return E_BV, meta
+    
+    def compute_EBV_quick(self, wave_eval, pp,
+                        B_window=(4300.0, 4800.0),
+                        V_window=(5400.0, 5900.0),
+                        return_meta=True):
+        """
+        Fast, approximate E(B-V) using only B and V continuum windows.
+        No reddening law: E(B-V) ≈ A_B - A_V from the two continua.
+
+        Parameters
+        ----------
+        wave_eval : array-like (Å)
+        pp        : continuum parameter vector (as used by self.PL / self.F_poly_conti)
+        B_window  : (λ1, λ2) Å, continuum window near 'B' (defaults avoid strong lines)
+        V_window  : (λ1, λ2) Å, continuum window near 'V'
+        return_meta : if True, return (EBV, meta) with details
+
+        Returns
+        -------
+        EBV : float
+        meta : dict with window means and masks (if return_meta)
+        """
+        import numpy as np
+
+        wave = np.asarray(wave_eval, dtype=float)
+        # Intrinsic and reddened continua
+        F_int = self.PL(wave, pp)
+        F_red = self.PL(wave, pp) + self.F_poly_conti(wave, pp[12:])
+
+        valid = np.isfinite(F_int) & np.isfinite(F_red) & (F_int > 0) & (F_red > 0)
+        if not np.any(valid):
+            raise ValueError("No valid wavelengths to compute E(B-V).")
+
+        def _logmean_in_window(w1, w2):
+            m = valid & (wave >= w1) & (wave <= w2)
+            if np.count_nonzero(m) >= 3:
+                # geometric mean to mimic simple band integration
+                Fr = np.exp(np.mean(np.log(F_red[m])))
+                Fi = np.exp(np.mean(np.log(F_int[m])))
+                return Fr, Fi, m
+            # fallback: single-λ interpolation
+            lam = 0.5 * (w1 + w2)
+            Fr = np.interp(lam, wave[valid], F_red[valid])
+            Fi = np.interp(lam, wave[valid], F_int[valid])
+            m = (wave >= lam) & (wave <= lam)  # empty boolean just for meta
+            return Fr, Fi, m
+
+        Fr_B, Fi_B, mB = _logmean_in_window(*B_window)
+        Fr_V, Fi_V, mV = _logmean_in_window(*V_window)
+
+        if (Fr_B <= 0) or (Fi_B <= 0) or (Fr_V <= 0) or (Fi_V <= 0):
+            raise ValueError("Non-positive flux in B or V estimate; cannot compute EBV_quick.")
+
+        # A_B and A_V from the two continua
+        A_B = -2.5 * np.log10(Fr_B / Fi_B)
+        A_V = -2.5 * np.log10(Fr_V / Fi_V)
+        EBV = float(A_B - A_V)
+
+        if not return_meta:
+            return EBV
+
+        meta = dict(
+            wave=wave,
+            B_window=B_window,
+            V_window=V_window,
+            mask_B=mB,
+            mask_V=mV,
+            A_B=A_B,
+            A_V=A_V,
+            Fr_B=Fr_B, Fi_B=Fi_B,
+            Fr_V=Fr_V, Fi_V=Fi_V,
+        )
+        return EBV, meta
 
 
 def get_err(s, margin=0.16, axis=0, default_value=-1.):
