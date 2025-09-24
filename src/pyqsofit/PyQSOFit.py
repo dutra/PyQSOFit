@@ -1353,17 +1353,17 @@ class QSOFit():
         intrinsic_cont = self.f_pl_model                              # PL only (dereddened)
 
         # compute_EBV is your function that uses wave + both curves
-        EBV_value, meta = self.compute_EBV(wave, self.conti_params, R_V=3.1)
+        EBV_ccm89, meta = self.compute_EBV_ccm89(wave, self.conti_params, R_V=3.1)
 
         # push into the “continuum result” vectors so it’s saved like other conti metrics
-        self.conti_result = np.append(self.conti_result, [EBV_value])
+        self.conti_result = np.append(self.conti_result, [EBV_ccm89])
+        self.conti_result_type = np.append(self.conti_result_type, ['float'])
+        self.conti_result_name = np.append(self.conti_result_name, ['EBV_ccm89'])
+
+        EBV, _ = self.compute_EBV(wave, self.conti_params)
+        self.conti_result      = np.append(self.conti_result,      [EBV])
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
         self.conti_result_name = np.append(self.conti_result_name, ['EBV'])
-
-        EBV_quick, _ = self.compute_EBV_quick(wave, self.conti_params)
-        self.conti_result      = np.append(self.conti_result,      [EBV_quick])
-        self.conti_result_type = np.append(self.conti_result_type, ['float'])
-        self.conti_result_name = np.append(self.conti_result_name, ['EBV_quick'])
 
 
         return self.conti_result, self.conti_result_name
@@ -2836,7 +2836,7 @@ class QSOFit():
         return k
 
 
-    def compute_EBV(self, wave_eval, pp, *, R_V=3.1, weights=None, mask=None, return_meta=True):
+    def compute_EBV_ccm89(self, wave_eval, pp, *, R_V=3.1, weights=None, mask=None, return_meta=True):
         """
         Estimate E(B-V) by fitting A(λ) from the full curve to CCM89 k(λ).
         wave_eval : array of rest-frame wavelengths (Å) on which to evaluate the continua
@@ -2905,7 +2905,7 @@ class QSOFit():
         )
         return E_BV, meta
     
-    def compute_EBV_quick(self, wave_eval, pp,
+    def compute_EBV(self, wave_eval, pp,
                         B_window=(4300.0, 4800.0),
                         V_window=(5400.0, 5900.0),
                         return_meta=True):
