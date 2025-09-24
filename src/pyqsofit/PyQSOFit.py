@@ -1351,16 +1351,24 @@ class QSOFit():
         # --- E(B-V) from full curve (reddened vs. intrinsic) ---
         reddened_cont = self.f_pl_model + self.f_poly_model          # PL + reddening poly
         intrinsic_cont = self.f_pl_model                              # PL only (dereddened)
+        
+        try:
+            # compute_EBV is your function that uses wave + both curves
+            EBV_ccm89, meta = self.compute_EBV_ccm89(wave, self.conti_params, R_V=3.1)
+        except Exception as e:
+            print(f"Error computing E(B-V) using CCM89: {e}")
+            EBV_ccm89 = -1e9
 
-        # compute_EBV is your function that uses wave + both curves
-        EBV_ccm89, meta = self.compute_EBV_ccm89(wave, self.conti_params, R_V=3.1)
-
-        # push into the “continuum result” vectors so it’s saved like other conti metrics
         self.conti_result = np.append(self.conti_result, [EBV_ccm89])
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
         self.conti_result_name = np.append(self.conti_result_name, ['EBV_ccm89'])
 
-        EBV, _ = self.compute_EBV(wave, self.conti_params)
+        try:
+            EBV, _ = self.compute_EBV(wave, self.conti_params)
+        except Exception as e:
+            print(f"Error computing E(B-V): {e}")
+            EBV = -1e9
+
         self.conti_result      = np.append(self.conti_result,      [EBV])
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
         self.conti_result_name = np.append(self.conti_result_name, ['EBV'])
