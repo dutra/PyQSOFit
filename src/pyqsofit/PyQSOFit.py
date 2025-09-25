@@ -1309,7 +1309,7 @@ class QSOFit():
 
         self.conti_result      = np.append(self.conti_result,      [EBV])
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
-        self.conti_result_name = np.append(self.conti_result_name, ['my_EBV'])
+        self.conti_result_name = np.append(self.conti_result_name, ['EBV'])
 
 
         return self.conti_result, self.conti_result_name
