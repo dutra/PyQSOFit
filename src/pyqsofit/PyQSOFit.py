@@ -1311,6 +1311,16 @@ class QSOFit():
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
         self.conti_result_name = np.append(self.conti_result_name, ['EBV'])
 
+        try:
+            EUV, _ = self.compute_EUV(wave, self.conti_params)
+        except Exception as e:
+            print(f"Error computing E(B-V) proxy: {e}")
+            EBV = -1e9
+
+        self.conti_result      = np.append(self.conti_result,      [EUV])
+        self.conti_result_type = np.append(self.conti_result_type, ['float'])
+        self.conti_result_name = np.append(self.conti_result_name, ['EUV'])
+
 
         return self.conti_result, self.conti_result_name
 
@@ -2725,74 +2735,168 @@ class QSOFit():
     def compute_EBV(self, wave, params,
                     B_window=(4300.0, 4800.0),
                     V_window=(5400.0, 5900.0),
-                    halfwidth=100.0,
+                    wave_is_rest=True,
                     return_meta=True):
         """
-        Tiny, law-free E(B-V):
-        EBV = A_B - A_V,  A_λ = -2.5 * log10(F_red / F_int)
-        F_red = self.f_conti_model
-        F_int = self.PL_poly_BC
+        Compute classical E(B-V) from B/V continuum windows if they are within coverage.
+        Otherwise return -1e9.
 
-        If B/V windows are outside coverage, auto-pick two internal windows
-        (≈ 35% and 70% of the covered log-λ range) and return a UV color-excess proxy.
+        EBV = A_B - A_V,  A_λ = -2.5 log10(F_red / F_int).
+
+        Parameters
+        ----------
+        wave : array-like
+            Wavelength grid (rest frame if wave_is_rest=True; otherwise observed frame).
+        params : dict-like
+            Must contain 'z' if wave_is_rest=False.
+        B_window, V_window : tuple(float, float)
+            Rest-frame windows for B and V continua.
+        wave_is_rest : bool
+            If False, convert observed -> rest frame using z.
+        return_meta : bool
+            If True, also return details dict.
+
+        Returns
+        -------
+        EBV : float
+            Color excess, or -1e9 if windows not available.
+        meta : dict
+            Info on windows and note (only if return_meta=True).
         """
+        import numpy as np
 
-        F_red = self.PL_poly_BC      # observed/reddened
-        F_int = self.f_conti_model   # intrinsic
+        # --- Align frames ---
+        wave = np.asarray(wave, float)
+        if not wave_is_rest:
+            z = float(params.get("z", getattr(self, "z", np.nan)))
+            if not np.isfinite(z):
+                raise ValueError("Need redshift z when wave_is_rest=False")
+            wave = wave / (1.0 + z)  # observed -> rest
 
-        # Valid pixels
-        wave  = np.asarray(wave, float)
+        # --- Model fluxes ---
+        F_red = np.asarray(self.PL_poly_BC, float)     # reddened
+        F_int = np.asarray(self.f_conti_model, float)  # intrinsic
+
+        # --- Valid pixels ---
         valid = np.isfinite(wave) & np.isfinite(F_red) & np.isfinite(F_int) & (F_red > 0) & (F_int > 0)
         if not np.any(valid):
-            raise ValueError("No valid pixels for EBV calculation.")
+            if return_meta:
+                return -1e9, {"note": "No valid pixels"}
+            return -1e9
 
-        w = wave[valid]; Fr = F_red[valid]; Fi = F_int[valid]
-        wmin, wmax = float(w.min()), float(w.max())
+        w  = wave[valid]; Fr = F_red[valid]; Fi = F_int[valid]
 
         def _geom_mean_ratio(w1, w2):
             m = (w >= w1) & (w <= w2)
             if m.sum() < 3:
                 return None
-            # geometric means are stable for PL-like continua
             Fr_g = np.exp(np.mean(np.log(Fr[m])))
             Fi_g = np.exp(np.mean(np.log(Fi[m])))
-            # attenuation in mag at this window
             return -2.5 * (np.log10(Fr_g) - np.log10(Fi_g))
 
-        # 1) Try classical B/V windows
-        AB = _geom_mean_ratio(*B_window) if (B_window[0] <= wmax and B_window[1] >= wmin) else None
-        AV = _geom_mean_ratio(*V_window) if (V_window[0] <= wmax and V_window[1] >= wmin) else None
+        # --- Try B and V ---
+        AB = _geom_mean_ratio(*B_window)
+        AV = _geom_mean_ratio(*V_window)
 
         if (AB is not None) and (AV is not None):
             EBV = float(AB - AV)
-            note = "B/V windows used."
-            used_windows = {"B": B_window, "V": V_window}
-
+            note = "B/V windows used"
         else:
-            # 2) Auto-pick two internal windows (35% and 70% in log-λ), width = halfwidth
-            xl, xh = np.log(wmin), np.log(wmax)
-            c1 = np.exp(xl + 0.35 * (xh - xl))
-            c2 = np.exp(xl + 0.70 * (xh - xl))
-            W1 = (c1 - halfwidth, c1 + halfwidth)
-            W2 = (c2 - halfwidth, c2 + halfwidth)
-
-            A1 = _geom_mean_ratio(*W1)
-            A2 = _geom_mean_ratio(*W2)
-            if (A1 is None) or (A2 is None):
-                raise ValueError(
-                    f"Insufficient overlap to form windows within [{wmin:.0f},{wmax:.0f}] Å."
-                )
-            EBV = float(A1 - A2)
-            note = "Auto UV windows used (color-excess proxy)."
-            used_windows = {"W1": (float(W1[0]), float(W1[1])), "W2": (float(W2[0]), float(W2[1]))}
+            EBV = -1e9
+            note = "B/V windows not within coverage"
 
         if not return_meta:
             return EBV
+        return EBV, {"B_window": B_window, "V_window": V_window, "note": note}
 
-        return EBV, {
-            "range": (wmin, wmax),
-            "used_windows": used_windows,
-            "note": note
+    
+    def compute_EUV(self, wave, params,
+                    halfwidth=100.0,
+                    uv_fracs=(0.35, 0.70),   # positions in log-λ across covered range
+                    wave_is_rest=True,
+                    return_meta=True):
+        """
+        UV color-excess proxy from two internal REST-FRAME windows.
+
+        We define two continuum windows centered at the 35% and 70% points of the
+        covered log-wavelength span and compute:
+            EBV_proxy = A_(W1) - A_(W2),  with  A_λ = -2.5 * log10(F_red / F_int).
+        This is a *proxy* for E(B-V), suitable when classical B/V windows are not covered.
+
+        Parameters
+        ----------
+        wave : array-like
+            Wavelength grid (rest frame if wave_is_rest=True; otherwise observed frame).
+        params : dict-like
+            Must contain 'z' if wave_is_rest=False.
+        halfwidth : float
+            Half-width (Å) of each rectangular window around its center.
+        uv_fracs : tuple(float, float)
+            Fractions (in log-λ) within [0,1] selecting the two window centers.
+        wave_is_rest : bool
+            If False, convert observed frame to rest using z.
+        return_meta : bool
+            If True, return (EBV_proxy, meta_dict).
+
+        Returns
+        -------
+        EBV_proxy : float
+        meta : dict   (if return_meta)
+        """
+        import numpy as np
+
+        # --- Frame alignment ---
+        wave = np.asarray(wave, float)
+        if not wave_is_rest:
+            z = float(params.get("z", getattr(self, "z", np.nan)))
+            if not np.isfinite(z):
+                raise ValueError("Redshift z is required when wave_is_rest=False.")
+            wave = wave / (1.0 + z)  # observed -> rest
+
+        # --- Model fluxes on the SAME grid as 'wave' (your code already evaluates these on 'wave') ---
+        F_red = np.asarray(self.PL_poly_BC,  float)   # reddened/observed model
+        F_int = np.asarray(self.f_conti_model, float) # intrinsic model
+
+        # --- Valid pixels ---
+        valid = np.isfinite(wave) & np.isfinite(F_red) & np.isfinite(F_int) & (F_red > 0) & (F_int > 0)
+        if not np.any(valid):
+            raise ValueError("No valid pixels for EBV proxy calculation.")
+
+        w  = wave[valid]; Fr = F_red[valid]; Fi = F_int[valid]
+        wmin, wmax = float(w.min()), float(w.max())
+
+        # --- Choose two internal windows in log-λ ---
+        f1, f2 = float(uv_fracs[0]), float(uv_fracs[1])
+        xl, xh = np.log(wmin), np.log(wmax)
+        c1 = np.exp(xl + f1 * (xh - xl))
+        c2 = np.exp(xl + f2 * (xh - xl))
+        W1 = (c1 - halfwidth, c1 + halfwidth)
+        W2 = (c2 - halfwidth, c2 + halfwidth)
+
+        def _geom_mean_ratio(w1, w2):
+            m = (w >= w1) & (w <= w2)
+            if m.sum() < 3:
+                return None
+            # geometric means stabilize PL-like continua
+            Fr_g = np.exp(np.mean(np.log(Fr[m])))
+            Fi_g = np.exp(np.mean(np.log(Fi[m])))
+            return -2.5 * (np.log10(Fr_g) - np.log10(Fi_g))  # A_λ
+
+        A1 = _geom_mean_ratio(*W1)
+        A2 = _geom_mean_ratio(*W2)
+        if (A1 is None) or (A2 is None):
+            raise ValueError(f"Insufficient overlap for UV proxy within [{wmin:.0f},{wmax:.0f}] Å.")
+
+        EBV_proxy = float(A1 - A2)
+        if not return_meta:
+            return EBV_proxy
+
+        return EBV_proxy, {
+            "range_rest": (wmin, wmax),
+            "used_windows_rest": {"W1": (float(W1[0]), float(W1[1])),
+                                "W2": (float(W2[0]), float(W2[1]))},
+            "centers_rest": (float(c1), float(c2)),
+            "note": "UV color-excess proxy from two internal rest-frame windows."
         }
 
 
