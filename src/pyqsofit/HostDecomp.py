@@ -363,6 +363,7 @@ class Linear_decomp():
             raise ValueError('Not enough data points for host fraction calculation')
         ind_f5100 = np.where((self.wave > 5080.) & (self.wave < 5130.), True, False)
         if np.sum(ind_f5100) > 10:
+            # frac_host_5100 = np.sum(gal_flux[ind_f5100]) / np.sum(self.flux[ind_f5100])
             frac_host_5100 = np.sum(gal_flux[ind_f5100]) / np.sum(self.flux[ind_f5100])
         data_cube = np.vstack((self.wave, self.flux, self.err, gal_flux, qso_flux))
         return data_cube, frac_host_4200, frac_host_5100, qso_par, gal_par

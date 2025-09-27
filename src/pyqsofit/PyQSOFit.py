@@ -2735,7 +2735,6 @@ class QSOFit():
     def compute_EBV(self, wave, params,
                     B_window=(4300.0, 4800.0),
                     V_window=(5400.0, 5900.0),
-                    wave_is_rest=True,
                     return_meta=True):
         """
         Compute classical E(B-V) from B/V continuum windows if they are within coverage.
@@ -2747,12 +2746,8 @@ class QSOFit():
         ----------
         wave : array-like
             Wavelength grid (rest frame if wave_is_rest=True; otherwise observed frame).
-        params : dict-like
-            Must contain 'z' if wave_is_rest=False.
         B_window, V_window : tuple(float, float)
             Rest-frame windows for B and V continua.
-        wave_is_rest : bool
-            If False, convert observed -> rest frame using z.
         return_meta : bool
             If True, also return details dict.
 
@@ -2763,26 +2758,18 @@ class QSOFit():
         meta : dict
             Info on windows and note (only if return_meta=True).
         """
-        import numpy as np
 
         # --- Align frames ---
-        wave = np.asarray(wave, float)
-        if not wave_is_rest:
-            z = float(params.get("z", getattr(self, "z", np.nan)))
-            if not np.isfinite(z):
-                raise ValueError("Need redshift z when wave_is_rest=False")
-            wave = wave / (1.0 + z)  # observed -> rest
+        wave = wave * (1.0 + self.z)  # rest -> observed
 
         # --- Model fluxes ---
-        F_red = np.asarray(self.PL_poly_BC, float)     # reddened
-        F_int = np.asarray(self.f_conti_model, float)  # intrinsic
+        F_red = self.PL(wave, params) + self.F_poly_conti(wave, params[12:])     # reddened
+        F_int = self.PL(wave, params)  # intrinsic
 
         # --- Valid pixels ---
         valid = np.isfinite(wave) & np.isfinite(F_red) & np.isfinite(F_int) & (F_red > 0) & (F_int > 0)
         if not np.any(valid):
-            if return_meta:
-                return -1e9, {"note": "No valid pixels"}
-            return -1e9
+            raise ValueError("No valid pixels for EBV calculation.")
 
         w  = wave[valid]; Fr = F_red[valid]; Fi = F_int[valid]
 
@@ -2802,8 +2789,7 @@ class QSOFit():
             EBV = float(AB - AV)
             note = "B/V windows used"
         else:
-            EBV = -1e9
-            note = "B/V windows not within coverage"
+           raise ValueError(f"Insufficient overlap for E(B-V) within [{w.min():.0f},{w.max():.0f}] Å.")
 
         if not return_meta:
             return EBV
@@ -2843,19 +2829,10 @@ class QSOFit():
         EBV_proxy : float
         meta : dict   (if return_meta)
         """
-        import numpy as np
-
-        # --- Frame alignment ---
-        wave = np.asarray(wave, float)
-        if not wave_is_rest:
-            z = float(params.get("z", getattr(self, "z", np.nan)))
-            if not np.isfinite(z):
-                raise ValueError("Redshift z is required when wave_is_rest=False.")
-            wave = wave / (1.0 + z)  # observed -> rest
 
         # --- Model fluxes on the SAME grid as 'wave' (your code already evaluates these on 'wave') ---
-        F_red = np.asarray(self.PL_poly_BC,  float)   # reddened/observed model
-        F_int = np.asarray(self.f_conti_model, float) # intrinsic model
+        F_red = self.PL(wave, params) + self.F_poly_conti(wave, params[12:])     # reddened
+        F_int = self.PL(wave, params)  # intrinsic
 
         # --- Valid pixels ---
         valid = np.isfinite(wave) & np.isfinite(F_red) & np.isfinite(F_int) & (F_red > 0) & (F_int > 0)
