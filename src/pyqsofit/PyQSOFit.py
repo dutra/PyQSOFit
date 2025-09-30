@@ -1301,21 +1301,22 @@ class QSOFit():
         self.line_flux = flux - self.f_conti_model
         self.PL_poly_BC = self.f_pl_model + self.f_poly_model + self.f_bc_model
 
+        EBV = -1e9
         try:
             EBV, _ = self.compute_EBV(wave, self.conti_params)
         except Exception as e:
             print(f"Error computing E(B-V): {e}")
-            EBV = -1e9
+            
 
         self.conti_result      = np.append(self.conti_result,      [EBV])
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
         self.conti_result_name = np.append(self.conti_result_name, ['EBV'])
 
+        EUV = -1e9
         try:
             EUV, _ = self.compute_EUV(wave, self.conti_params)
         except Exception as e:
             print(f"Error computing E(B-V) proxy: {e}")
-            EBV = -1e9
 
         self.conti_result      = np.append(self.conti_result,      [EUV])
         self.conti_result_type = np.append(self.conti_result_type, ['float'])
