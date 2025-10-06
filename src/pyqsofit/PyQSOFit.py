@@ -2407,7 +2407,7 @@ class QSOFit():
         bc_uniform = np.interp(loglam_uniform, loglam, bc)
 
         # Kernel width in log-lam
-        v_broad_kms = float(pp[3])
+        v_broad_kms = float(pp['Balmer_vel'])  # in km/s
         c_kms = 2.99792458e5
         sigma_loglam = (v_broad_kms / c_kms)  # since d(loglam) ~ d(v)/c
 
