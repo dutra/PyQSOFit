@@ -1277,10 +1277,16 @@ class QSOFit():
 
             return L
 
+    def _softplus_scaled(self, x, beta=5.0):
+        # beta -> larger means sharper transition, closer to max(x, 0)
+        bx = beta * x
+        return (np.maximum(bx, 0) + np.log1p(np.exp(-np.abs(bx)))) / beta
+
     def _residuals(self, param_dict, xval, yval, weight, _conti_model):
         """Continual residual function used in lmfit"""
-        #pp = list(p.valuesdict().values())
-        return (yval - _conti_model(xval, param_dict)) / weight
+        y_model = _conti_model(xval, param_dict)
+        #y_model = self._softplus_scaled(y_model, beta=5.0)  # ensure non-negative model
+        return (yval - y_model) / weight
 
     def fit_lines(self, wave, line_flux, err, f):
         """Fit the emission lines with Gaussian profiles."""
