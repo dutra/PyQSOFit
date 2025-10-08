@@ -1085,6 +1085,8 @@ class QSOFit():
                     burn=getattr(self, "nburn", 200),
                     steps=getattr(self, "nsamp", 1000),
                     thin=getattr(self, "nthin", 1),
+                    xtol=getattr(self, "xtol_conti", 1e-8),
+                    ftol=getattr(self, "ftol_conti", 1e-8),
                     **getattr(self, "kwargs_conti_emcee", {}),
                     is_weighted=True,
                 )
@@ -1130,6 +1132,8 @@ class QSOFit():
                         conti_fit.params,
                         args=(w_win[ind_noBAL], fR_win, e_win[ind_noBAL], _conti_model),
                         calc_covar=False,
+                        xtol=getattr(self, "xtol_conti", 1e-8),
+                        ftol=getattr(self, "ftol_conti", 1e-8),
                     )
                     samples[k] = list(conti_fit_k.params.valuesdict().values())
             else:
@@ -1563,6 +1567,8 @@ class QSOFit():
                         steps=getattr(self, "nsamp", 1000),
                         thin=getattr(self, "nthin", 1),
                         is_weighted=True,
+                        xtol=getattr(self, "xtol_line", 1e-8),
+                        ftol=getattr(self, "ftol_line", 1e-8),
                         **getattr(self, "kwargs_line_emcee", {})
                     )
                     df_samples = line_samples.flatchain
