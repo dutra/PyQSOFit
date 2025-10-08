@@ -2012,6 +2012,7 @@ class QSOFit():
         plot_residual=True,
         show_title=True,
         plot_br_prop=False,
+        disable_secondary_plot=False
     ):
         """Plot continuum + (optional) line complexes, using dict-based components."""
 
@@ -2088,7 +2089,7 @@ class QSOFit():
         mc_flag = 2 if ((getattr(self, "MCMC", False) or getattr(self, "MC", False)) and getattr(self, "nsamp", 0) > 0) else 1
         ncomp_fit = (len(getattr(self, "fur_result", [])) // (mc_flag * 6)) if has_lines else 0
 
-        if has_lines:
+        if has_lines and (not disable_secondary_plot):
             fig, axn = plt.subplots(nrows=2, ncols=max(ncomp_fit, 1), figsize=(15, 8), squeeze=False, sharex=False)
             # Merge top row cells into one big main axis
             gs = axn[0, 0].get_gridspec()
@@ -2128,61 +2129,62 @@ class QSOFit():
             # main axis: total lines + continuum
             ax.plot(wave_eval, conti_eval + lines_total_eval, "b", label="line", zorder=6)
 
-            # per-complex mini-panels
-            for c in range(ncomp_fit):
-                axc = axn[1][c]
-                axc.plot(wave_eval, lines_total_eval, color="b", zorder=10)
-                f_line_br_interp = interpolate.interp1d(self.wave, self.f_line_br_model, bounds_error=False, fill_value=0)
-                f_line_br_eval = f_line_br_interp(wave_eval)
-                axc.plot(wave_eval, f_line_br_eval, color="r", zorder=6)
-                f_line_narrow_interp = interpolate.interp1d(self.wave, self.f_line_narrow_model, bounds_error=False, fill_value=0)
-                f_line_narrow_eval = f_line_narrow_interp(wave_eval)
-                axc.plot(wave_eval, f_line_narrow_eval, color="g", zorder=8)
-                lo_c, hi_c = self.all_comp_range[2 * c : 2 * c + 2]
-                axc.set_xlim(lo_c, hi_c)
+            if has_lines and (not disable_secondary_plot):
+                # per-complex mini-panels
+                for c in range(ncomp_fit):
+                    axc = axn[1][c]
+                    axc.plot(wave_eval, lines_total_eval, color="b", zorder=10)
+                    f_line_br_interp = interpolate.interp1d(self.wave, self.f_line_br_model, bounds_error=False, fill_value=0)
+                    f_line_br_eval = f_line_br_interp(wave_eval)
+                    axc.plot(wave_eval, f_line_br_eval, color="r", zorder=6)
+                    f_line_narrow_interp = interpolate.interp1d(self.wave, self.f_line_narrow_model, bounds_error=False, fill_value=0)
+                    f_line_narrow_eval = f_line_narrow_interp(wave_eval)
+                    axc.plot(wave_eval, f_line_narrow_eval, color="g", zorder=8)
+                    lo_c, hi_c = self.all_comp_range[2 * c : 2 * c + 2]
+                    axc.set_xlim(lo_c, hi_c)
 
-                # robust ylim from residuals in this complex
-                mask_c = (self.wave > lo_c) & (self.wave < hi_c)
-                resid_c = (self.line_flux - self.f_line_model)[mask_c] if np.any(mask_c) else np.array([])
-                lo_y, hi_y = _robust_ylim(self.f_line_model[mask_c]) if ylims is None else (ylims[0], ylims[1])
-                axc.set_ylim(lo_y, hi_y)
+                    # robust ylim from residuals in this complex
+                    mask_c = (self.wave > lo_c) & (self.wave < hi_c)
+                    resid_c = (self.line_flux - self.f_line_model)[mask_c] if np.any(mask_c) else np.array([])
+                    lo_y, hi_y = _robust_ylim(self.f_line_model[mask_c]) if ylims is None else (ylims[0], ylims[1])
+                    axc.set_ylim(lo_y, hi_y)
 
-                # ticks & labels
-                axc.set_xticks([lo_c, np.round((lo_c + hi_c) / 2, -1), hi_c])
-                axc.text(0.02, 0.90, _pretty_name(self.uniq_linecomp_sort[c]), fontsize=20, transform=axc.transAxes)
-                axc.text(0.02, 0.825, r"$\chi^2_\nu=$" + str(np.round(float(self.comp_result[c * 7 + 4]), 2)),
-                        fontsize=12, transform=axc.transAxes)
+                    # ticks & labels
+                    axc.set_xticks([lo_c, np.round((lo_c + hi_c) / 2, -1), hi_c])
+                    axc.text(0.02, 0.90, _pretty_name(self.uniq_linecomp_sort[c]), fontsize=20, transform=axc.transAxes)
+                    axc.text(0.02, 0.825, r"$\chi^2_\nu=$" + str(np.round(float(self.comp_result[c * 7 + 4]), 2)),
+                            fontsize=12, transform=axc.transAxes)
 
-                if plot_br_prop:
-                    fwhm = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_fwhm"][0]
-                    area = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_area"][0]
-                    snr  = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_snr"][0]
-                    if mc_flag == 2:
-                        fwhm_err = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_fwhm_err"][0]
-                        area_err = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_area_err"][0]
-                        axc.text(0.02, 0.75,
-                                fr"$L_{{\rm br}}=10^{{{{{np.round(np.log10(self.flux2L(area)), 2)}}}\pm{{{np.round(0.434 * self.flux2L(area_err) / self.flux2L(area), 2)}}}}}$"
-                                + r"$\ \rm{erg}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
-                        axc.text(0.02, 0.675,
-                                fr"${{\rm FWHM}}_{{\rm br}}={{{int(np.round(fwhm, 0))}}}\pm{{{int(np.round(fwhm_err, 0))}}}$"
-                                + r"$\ \rm{km}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
-                    else:
-                        axc.text(0.02, 0.75,
-                                fr"$L_{{\rm br}}=10^{{{np.round(np.log10(self.flux2L(area)), 1)}}}$"
-                                + r"$\ \rm{erg}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
-                        axc.text(0.02, 0.675,
-                                fr"${{\rm FWHM}}_{{\rm br}}={{{int(np.round(fwhm, 0))}}}$"
-                                + r"$\ \rm{km}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
+                    if plot_br_prop:
+                        fwhm = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_fwhm"][0]
+                        area = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_area"][0]
+                        snr  = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_snr"][0]
+                        if mc_flag == 2:
+                            fwhm_err = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_fwhm_err"][0]
+                            area_err = self.fur_result[self.fur_result_name == f"{self.uniq_linecomp_sort[c]}_whole_br_area_err"][0]
+                            axc.text(0.02, 0.75,
+                                    fr"$L_{{\rm br}}=10^{{{{{np.round(np.log10(self.flux2L(area)), 2)}}}\pm{{{np.round(0.434 * self.flux2L(area_err) / self.flux2L(area), 2)}}}}}$"
+                                    + r"$\ \rm{erg}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
+                            axc.text(0.02, 0.675,
+                                    fr"${{\rm FWHM}}_{{\rm br}}={{{int(np.round(fwhm, 0))}}}\pm{{{int(np.round(fwhm_err, 0))}}}$"
+                                    + r"$\ \rm{km}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
+                        else:
+                            axc.text(0.02, 0.75,
+                                    fr"$L_{{\rm br}}=10^{{{np.round(np.log10(self.flux2L(area)), 1)}}}$"
+                                    + r"$\ \rm{erg}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
+                            axc.text(0.02, 0.675,
+                                    fr"${{\rm FWHM}}_{{\rm br}}={{{int(np.round(fwhm, 0))}}}$"
+                                    + r"$\ \rm{km}\ \rm{s}^{-1}$", fontsize=12, transform=axc.transAxes)
 
-                    axc.text(0.02, 0.60, fr"$S/N_{{\rm br}}={np.round(snr, 1)}$", fontsize=12, transform=axc.transAxes)
+                        axc.text(0.02, 0.60, fr"$S/N_{{\rm br}}={np.round(snr, 1)}$", fontsize=12, transform=axc.transAxes)
 
-                # add masked spans + residuals if requested (NaN masking keeps lines broken)
-                line_flux_nan = _apply_nan_mask(self.wave, self.line_flux, self.wave_mask)
-                axc.plot(self.wave, line_flux_nan, "k", label="data", lw=1, zorder=2)
-                if plot_residual:
-                    axc.axhline(-5, color="k", zorder=0, lw=0.5)
-                    resid_nan = _apply_nan_mask(self.wave, self.line_flux - self.f_line_model - 5, self.wave_mask)
-                    axc.plot(self.wave, resid_nan, "gray", linestyle="dotted", lw=1, zorder=3)
+                    # add masked spans + residuals if requested (NaN masking keeps lines broken)
+                    line_flux_nan = _apply_nan_mask(self.wave, self.line_flux, self.wave_mask)
+                    axc.plot(self.wave, line_flux_nan, "k", label="data", lw=1, zorder=2)
+                    if plot_residual:
+                        axc.axhline(-5, color="k", zorder=0, lw=0.5)
+                        resid_nan = _apply_nan_mask(self.wave, self.line_flux - self.f_line_model - 5, self.wave_mask)
+                        axc.plot(self.wave, resid_nan, "gray", linestyle="dotted", lw=1, zorder=3)
 
         # ---------- main panel plotting ----------
         # masked versions of observed spectra (break lines across masked spans)
