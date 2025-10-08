@@ -1124,12 +1124,21 @@ class QSOFit():
             elif (not getattr(self, "MCMC", False)) and getattr(self, "MC", False):
                 nsamp = int(getattr(self, "nsamp", 100))
                 samples = np.zeros((nsamp, len(par_names)))
+                
                 for k in range(nsamp):
                     flux_resampled = flux + rng.normal(0.0, 1.0, size=flux.size) * err
                     fR_win = flux_resampled[in_any_window][ind_noBAL]
+
+                    # small jitter to avoid identical starting points
+                    pars_k = conti_fit.params.copy()
+                    for name, par in pars_k.items():
+                        if par.vary:
+                            span = (par.max - par.min) if (par.max is not None and par.min is not None and par.max > par.min) else max(1e-6, abs(par.value))
+                            par.value += rng.normal(0.0, 0.01*span)
+
                     conti_fit_k = minimize(
                         self._residuals,
-                        conti_fit.params,
+                        pars_k,
                         args=(w_win[ind_noBAL], fR_win, e_win[ind_noBAL], _conti_model),
                         calc_covar=False,
                         xtol=getattr(self, "xtol_conti", 1e-8),
@@ -1138,11 +1147,9 @@ class QSOFit():
                     samples[k] = list(conti_fit_k.params.valuesdict().values())
             else:
                 raise RuntimeError("MCMC and MC modes are both True")
-
             # parameter errors
             params_err = get_err(samples, axis=0)
 
-            # products for samples
             samples_pd = [_vec_to_dict(vec, par_names) for vec in samples]
 
             Ls = np.empty((len(samples_pd), len(self.L_conti_wave)))
