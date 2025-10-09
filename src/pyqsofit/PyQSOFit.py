@@ -1132,7 +1132,7 @@ class QSOFit():
                     # small jitter to avoid identical starting points
                     pars_k = conti_fit.params.copy()
                     for name, par in pars_k.items():
-                        if par.vary:
+                        if par.vary and ('conti_a' not in name):
                             span = (par.max - par.min) if (par.max is not None and par.min is not None and par.max > par.min) else max(1e-6, abs(par.value))
                             par.value += rng.normal(0.0, 0.01*span)
 
@@ -2191,14 +2191,42 @@ class QSOFit():
         flux_main = _apply_nan_mask(self.wave_prereduced, self.flux_prereduced, self.wave_mask)
         ax.plot(self.wave_prereduced, flux_main, "k", label="data", lw=1, zorder=2)
 
-        # residuals on main panel
+        # ---- build the total model on BOTH grids, then use the plotted grid ----
+        # continuum evaluated on both grids
+        conti_on_wave = interpolate.interp1d(
+            wave_eval, conti_eval, bounds_error=False, fill_value="extrapolate"
+        )(self.wave)
+        conti_on_pre = interpolate.interp1d(
+            wave_eval, conti_eval, bounds_error=False, fill_value="extrapolate"
+        )(self.wave_prereduced)
+
+        if has_lines:
+            # self.f_line_model currently lives on self.wave; interpolate to the plotted grid
+            f_line_on_pre = interpolate.interp1d(
+                self.wave, self.f_line_model, bounds_error=False, fill_value=0.0
+        )(self.wave_prereduced)
+            total_on_pre = conti_on_pre + f_line_on_pre
+        else:
+            total_on_pre = conti_on_pre
+
+        # Residuals on the SAME arrays that are plotted
         if plot_residual:
-            if has_lines:
-                resid_main = _apply_nan_mask(self.wave, self.line_flux - self.f_line_model, self.wave_mask)
-            else:
-                # fall back to data - continuum
-                resid_main = _apply_nan_mask(self.wave, self.flux - self.f_conti_model, self.wave_mask)
-            ax.plot(self.wave, resid_main, "gray", label="resid", linestyle="dotted", lw=1, zorder=3)
+            resid_main = _apply_nan_mask(
+                self.wave_prereduced, self.flux_prereduced - total_on_pre, self.wave_mask
+            )
+            ax.plot(
+                self.wave_prereduced, resid_main, "gray", label="resid",
+                linestyle="dotted", lw=1, zorder=3
+            )
+            ax.axhline(0, color="black", linestyle="--", linewidth=1)
+        # residuals on main panel
+        #if plot_residual:
+        #    if has_lines:
+        #        resid_main = _apply_nan_mask(self.wave, self.line_flux - self.f_line_model, self.wave_mask)
+        #    else:
+        #        # fall back to data - continuum
+        #        resid_main = _apply_nan_mask(self.wave, self.flux - self.f_conti_model, self.wave_mask)
+        #    ax.plot(self.wave, resid_main, "gray", label="resid", linestyle="dotted", lw=1, zorder=3)
 
         # title
         if show_title:
