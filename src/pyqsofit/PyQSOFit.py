@@ -2219,6 +2219,7 @@ class QSOFit():
                 linestyle="dotted", lw=1, zorder=3
             )
             ax.axhline(0, color="black", linestyle="--", linewidth=1)
+            self.resid_main = resid_main  # save for later use
         # residuals on main panel
         #if plot_residual:
         #    if has_lines:
