@@ -2211,15 +2211,19 @@ class QSOFit():
 
         # Residuals on the SAME arrays that are plotted
         if plot_residual:
-            resid_main = _apply_nan_mask(
+            self.resid_main = _apply_nan_mask(
                 self.wave_prereduced, self.flux_prereduced - total_on_pre, self.wave_mask
             )
             ax.plot(
-                self.wave_prereduced, resid_main, "gray", label="resid",
+                self.wave_prereduced, self.resid_main, "gray", label="resid",
                 linestyle="dotted", lw=1, zorder=3
             )
             ax.axhline(0, color="black", linestyle="--", linewidth=1)
-            self.resid_main = resid_main  # save for later use
+            # Calculate reduced chi2 of the residuals
+            resid = self.flux_prereduced - total_on_pre
+            chi2 = np.sum((resid / self.err_prereduced) ** 2)
+            self.redchi2_conti_full = chi2 / (len(resid) - len(pdict))
+            
         # residuals on main panel
         #if plot_residual:
         #    if has_lines:
