@@ -1292,7 +1292,7 @@ class QSOFit():
     def _residuals(self, param_dict, xval, yval, weight, _conti_model):
         """Continual residual function used in lmfit"""
         y_model = _conti_model(xval, param_dict)
-        #y_model = self._softplus_scaled(y_model, beta=5.0)  # ensure non-negative model
+        y_model = self._softplus_scaled(y_model, beta=5.0)  # ensure non-negative model
         return (yval - y_model) / weight
 
     def fit_lines(self, wave, line_flux, err, f):
