@@ -2204,10 +2204,16 @@ class QSOFit():
             # self.f_line_model currently lives on self.wave; interpolate to the plotted grid
             f_line_on_pre = interpolate.interp1d(
                 self.wave, self.f_line_model, bounds_error=False, fill_value=0.0
-        )(self.wave_prereduced)
+            )(self.wave_prereduced)
             total_on_pre = conti_on_pre + f_line_on_pre
         else:
             total_on_pre = conti_on_pre
+
+        if getattr(self, "decompose_host", False) and getattr(self, "decomposed", False):
+            host_on_pre = interpolate.interp1d(
+                self.wave, self.host, bounds_error=False, fill_value=0.0
+            )(self.wave_prereduced)
+            total_on_pre += host_on_pre
 
         # Residuals on the SAME arrays that are plotted
         if plot_residual:
