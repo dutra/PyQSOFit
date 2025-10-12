@@ -2414,11 +2414,11 @@ class QSOFit():
             pp[9] = smoothness (ds)
             pp[10] = break location (x_break)
         """
-        x0 = np.median(xval)
+        x0 = (np.max(xval) - np.min(xval))/2.0 + np.min(xval)  # pivot point for normalization
         A = pp['PL_norm']
         d1 = pp['PL_slope_blue']
         d2 = pp['PL_slope_red']
-        ds = 0.1 #pp_extra[1]
+        ds = 0.1
         x_break = pp['PL_break_wave']
 
         x = xval / x_break
