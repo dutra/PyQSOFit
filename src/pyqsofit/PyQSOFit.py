@@ -979,7 +979,7 @@ class QSOFit():
             if getattr(self, "BC", True):
                 y += self.Balmer_conti(x, pd)
             if getattr(self, "poly", True):
-                y += self.F_poly_conti(x, pd)
+                y *= self.F_poly_conti(x, pd)
             return y
 
         # ---------- tiny helpers used below ----------
@@ -991,9 +991,9 @@ class QSOFit():
             feUV = self.Fe_flux_mgii(x, p_dict) if getattr(self, "Fe_uv_op", True) else 0.0
             feOp = self.Fe_flux_balmer(x, p_dict) if getattr(self, "Fe_uv_op", True) else 0.0
             bc = self.Balmer_conti(x, p_dict) if getattr(self, "BC", True) else 0.0
-            polyc = self.F_poly_conti(x, p_dict) if getattr(self, "poly", True) else 0.0
-            total = pl + feUV + feOp + bc + polyc
-            return pl, feUV, feOp, bc, polyc, total
+            atten = self.F_poly_conti(x, p_dict) if getattr(self, "poly", True) else 1.0
+            tot = pl + feUV + feOp + bc
+            return pl, feUV*atten, feOp*atten, bc*atten, pl*atten, tot*atten
 
         def _interleave(vals, errs):
             # [v0,e0,v1,e1,...]
@@ -1277,7 +1277,7 @@ class QSOFit():
             valid_idx = np.where((waves < np.max(wave)) & (waves > np.min(wave)), True, False)
             conti_flux = self.PL(waves[valid_idx], param_dict)
             if poly == True:
-                conti_flux += self.F_poly_conti(waves[valid_idx], param_dict)
+                conti_flux *= self.F_poly_conti(waves[valid_idx], param_dict)
             Llam = waves[valid_idx] * self.flux2L(conti_flux, self.z)
             Llam[Llam <= 0] = 1e-1  # to make the log of these invalid values to be -1.
             L[valid_idx] = np.log10(Llam)
@@ -1292,7 +1292,8 @@ class QSOFit():
     def _residuals(self, param_dict, xval, yval, weight, _conti_model):
         """Continual residual function used in lmfit"""
         y_model = _conti_model(xval, param_dict)
-        y_model = self._softplus_scaled(y_model, beta=5.0)  # ensure non-negative model
+        #y_model = self._softplus_scaled(y_model, beta=10.0)  # ensure non-negative model
+        #print(y_model)
         return (yval - y_model) / weight
 
     def fit_lines(self, wave, line_flux, err, f):
@@ -1893,10 +1894,10 @@ class QSOFit():
         #     (avoid positional parameter slicing)
         param_dict = self.conti_fit.params.valuesdict()
         conti = self.PL(lam, param_dict)
-        if getattr(self, "poly", True):
-            conti = conti + self.F_poly_conti(lam, param_dict)
         if getattr(self, "BC", True):
             conti = conti + self.Balmer_conti(lam, param_dict)
+        if getattr(self, "poly", True):
+            conti = conti * self.F_poly_conti(lam, param_dict)
 
         # ---- peak position (Å) and S/N from data residuals around the complex
         ypeak = float(np.nanmax(yy_br)) if yy_br.size else 0.0
@@ -2047,9 +2048,9 @@ class QSOFit():
             feuv = self.Fe_flux_mgii(xgrid, param_dict) if getattr(self, "Fe_uv_op", True) else 0.0
             feop = self.Fe_flux_balmer(xgrid, param_dict) if getattr(self, "Fe_uv_op", True) else 0.0
             bc   = self.Balmer_conti(xgrid, param_dict) if getattr(self, "BC", True) else 0.0
-            poly = self.F_poly_conti(xgrid, param_dict) if getattr(self, "poly", True) else 0.0
-            tot  = pl + feuv + feop + bc + poly
-            return pl, poly, bc, feuv, feop, tot
+            atten = self.F_poly_conti(xgrid, param_dict) if getattr(self, "poly", True) else 1.0
+            tot  = pl + feuv + feop + bc
+            return pl, pl*atten, bc*atten, feuv*atten, feop*atten, tot*atten
 
         def _robust_ylim(y, fallback_low=-1.0):
             """Return (lo, hi) with padding, durable when arrays are empty."""
@@ -2072,7 +2073,7 @@ class QSOFit():
         wave_eval = np.linspace(wmin - 200, wmax + 200, 5000)
 
         # Continuum pieces (evaluate once)
-        pl_eval, poly_eval, bc_eval, fe_uv_eval, fe_op_eval, conti_eval = _compute_continuum_grid(pdict, wave_eval)
+        pl_eval, pl_red_eval, bc_eval, fe_uv_eval, fe_op_eval, conti_eval = _compute_continuum_grid(pdict, wave_eval)
 
         # Residual arrays (compute once)
         # When lines are fitted, residuals are (data - continuum - lines); else (data - continuum).
@@ -2252,7 +2253,6 @@ class QSOFit():
         # host overlays (unchanged)
         if getattr(self, "decompose_host", False) and getattr(self, "decomposed", False):
             ax.plot(self.wave, self.qso + self.host, "pink", label="host+qso temp", zorder=3)
-            ax.plot(self.wave, self.flux, "grey", label="data-host", zorder=1)
             ax.plot(self.wave, self.host, "purple", label="host", zorder=4)
 
         # minimal legend handles (once)
@@ -2262,9 +2262,9 @@ class QSOFit():
         # continuum overlays (single eval each)
         ax.plot(wave_eval, conti_eval, "c", lw=2, label="FeII", zorder=7)
         if getattr(self, "BC", True):
-            ax.plot(wave_eval, pl_eval + poly_eval + bc_eval, "y", lw=2, label="BC", zorder=8)
-        ax.plot(wave_eval, pl_eval + poly_eval, color="orange", lw=2, label="reddened conti", zorder=9)
-        ax.plot(wave_eval, pl_eval, color="yellow", lw=2, label="conti", zorder=9)
+            ax.plot(wave_eval, pl_red_eval + bc_eval, "y", lw=2, label="BC", zorder=8)
+        ax.plot(wave_eval, pl_red_eval, color="orange", lw=2, label="conti", zorder=9)
+        ax.plot(wave_eval, pl_eval, color="yellow", lw=2, label="dereddened conti", zorder=9)
 
         # y-limits (robust) for main panel
         if ylims is None:
@@ -2398,7 +2398,7 @@ class QSOFit():
     #def PLsingle(self, xval, pp, x0=3000):
     #    return pp['PL_norm'] * (xval / x0) ** pp['PL_slope_blue']
 
-    def PL(self, xval, pp, x0=4000):
+    def PL(self, xval, pp):
         """
         Smooth broken power-law version of PL.
 
@@ -2413,9 +2413,8 @@ class QSOFit():
             pp[8] = slope2 (d2) for x > x_break
             pp[9] = smoothness (ds)
             pp[10] = break location (x_break)
-        x0 : float, optional
-            Reference wavelength for normalization (default 4000).
         """
+        x0 = np.median(xval)
         A = pp['PL_norm']
         d1 = pp['PL_slope_blue']
         d2 = pp['PL_slope_red']
@@ -2490,43 +2489,88 @@ class QSOFit():
 
         return bc_final * 1e-17
 
-    def F_poly_conti(self, xval, pp, x0=3000):
+
+    def F_poly_conti(self, xval, pp, Rv=2.74):
+        from dust_extinction.averages import G03_SMCBar
+        lam = np.asarray(xval, float)
+
+        # Get E(B−V)
+        EBV = pp["conti_a_0"]
+        Rv = pp["conti_a_1"]
+
+        # A_lambda from SMC Bar curve
+
+        curve = G03_SMCBar()              # or G23(Rv=3.1) if you prefer that curve
+        atten = curve.extinguish((lam*u.AA).to(u.um), Ebv=EBV) # multiplicative transmission, 0..1
+
+        return atten
+
+    def F_poly_conti_OLD(self, xval, pp, y_ref, cap_mag=1.0, cap_frac=0.9):
         """
         Fit the continuum with a polynomial component accounting for dust reddening.
         Ensures the output is negative everywhere.
         """
         #xval2 = xval - x0
-        # rescale pp for numerical precision
-        #yvals = [(pp[i]) * xval2 ** (i + 1) for i in range(len(pp))]
+        ## rescale pp for numerical precision
+        #yvals = [(pp['conti_a_{}'.format(i)]) * xval2 ** (i + 1) for i in range(3)]
         #poly = np.sum(yvals, axis=0) * 100
         #return poly
 
+        x0 = np.median(xval)
+
         from numpy.polynomial import polynomial as P
 
-        # Dimensionless coordinate centered at pivot (same as your original poly)
+        LOG10_1E = 0.9210340371976183  # ln(10)*0.4
+
+        def _softplus(x):
+            return np.log1p(np.exp(-np.abs(x))) + np.maximum(x, 0.)
+
+        # Dimensionless coordinate around pivot
+        xval = np.asarray(xval, float)
+        y_ref = np.asarray(y_ref, float)
         T = (xval - float(x0)) / float(x0)
+        Ta = np.abs(T)
 
-        # Amplitude at the pivot (≥ 0 so attenuation can't flip sign)
-        amp_raw = float(pp['conti_a_0'])
-        A0 = amp_raw if amp_raw > 20.0 else np.log1p(np.exp(amp_raw))  # softplus
+        # Amplitude at pivot (map to >=0). Scale down to avoid huge A.
+        a0_raw = float(pp['conti_a_0']) if hasattr(pp['conti_a_0'], 'value') is False else float(pp['conti_a_0'].value)
+        A0 = _softplus(a0_raw) * 0.3  # typical AGN-scale; adjust if needed
 
-        # Curvature controller: Q(T) = Σ b_j T^j  (unconstrained b_j)
-        b = np.array([float(pp[k]) for k in ["conti_a_1", "conti_a_2"]], dtype=float)
+        # Curvature controller Q(T) = Σ b_j T^j (unconstrained b_j). Scale to tame growth.
+        def _get(pp, k, default=0.0):
+            v = pp.get(k, default) if isinstance(pp, dict) else getattr(pp, k, default)
+            return float(v.value) if hasattr(v, 'value') else float(v)
 
-        if b.size == 0:
-            A = np.full_like(T, A0)
+        b = np.array([_get(pp, "conti_a_1", 0.0), _get(pp, "conti_a_2", 0.0)], dtype=float)
+        b *= 0.1  # shrink curvature sensitivity
+
+        if b.size == 0 or np.allclose(b, 0.0):
+            A_lambda = np.full_like(T, A0)
         else:
-            # Enforce dA/dT = -[Q(T)]^2 ≤ 0  ⇒ A(T) = A0 - ∫_0^T [Q(u)]^2 du
-            Q2 = P.polymul(b, b)   # coefficients of Q^2 ≥ 0
-            Int = P.polyint(Q2)    # indefinite integral; const=0 ⇒ integral from 0
-            I_T = P.polyval(T, Int)
-            A = A0 - I_T
+            # Q^2 >= 0, integrate from 0 to |T| so integral is >= 0
+            Q2 = P.polymul(b, b)
+            Int = P.polyint(Q2)                 # ∫ Q^2 dT with const=0
+            I = P.polyval(Ta, Int)              # I(|T|) >= 0
 
-        # Physical floor: extinction can't be negative
-        A = np.clip(A, 0.0, np.inf)
-        
-        # Return NEGATIVE attenuation
-        return -A
+            # Piecewise shape: increase to blue (T<0), decrease to red (T>0)
+            A_lambda = np.where(T >= 0.0, A0 - I, A0 + I)
+
+            # extinction can't be negative
+            A_lambda = np.clip(A_lambda, 0.0, None)
+
+        # Numerical cap in magnitudes (safety)
+        A_lambda = np.clip(A_lambda, 0.0, float(cap_mag))
+        print(f"A_lambda", A_lambda.min(), A_lambda.max())
+
+        # Convert to attenuation fraction α = 1 - 10^{-0.4 A}
+        alpha = 1.0 - np.exp(-LOG10_1E * A_lambda)
+
+        # Cap how much flux can be removed at any wavelength
+        alpha = np.clip(alpha, 0.0, float(cap_frac))  # e.g., ≤85% removal
+        print(f"A_lambda", alpha.min(), alpha.max())
+
+        f_poly_neg = -y_ref * alpha
+        f_poly_neg[~np.isfinite(f_poly_neg)] = 0.0
+        return f_poly_neg
 
     def flux2L(self, flux, z=None):
         """Transfer flux to luminoity assuming a flat Universe"""
