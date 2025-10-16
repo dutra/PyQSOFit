@@ -915,9 +915,9 @@ class QSOFit():
             print("No pixels in the continuum windows to be fit.")  # hard warning
 
         # Convenience slices of windowed arrays
-        w_win = wave[in_any_window]
-        f_win = flux[in_any_window]
-        e_win = err[in_any_window]
+        w_win = wave #[in_any_window]
+        f_win = flux #[in_any_window]
+        e_win = err #[in_any_window]
 
         # ---------- prepare lmfit.Parameters with small jitter ----------
         rng = np.random.default_rng()
@@ -1013,6 +1013,7 @@ class QSOFit():
             print("Fitting continuum (initial pass)…")
 
         # ---------- FIRST PASS ----------
+        print('Huber loss')
         conti_fit = minimize(
             self._residuals,
             fit_params,
@@ -1020,6 +1021,7 @@ class QSOFit():
             calc_covar=False,
             xtol=getattr(self, "xtol_conti", 1e-8),
             ftol=getattr(self, "ftol_conti", 1e-8),
+            method='least_squares', loss='huber', f_scale=1.345
         )
 
         # ---------- optional BAL trough rejection & SECOND PASS ----------
@@ -2229,6 +2231,7 @@ class QSOFit():
             # Calculate reduced chi2 of the residuals
             resid = self.flux_prereduced - total_on_pre
             chi2 = np.sum((resid / self.err_prereduced) ** 2)
+            print("pdict ", len(pdict))
             self.redchi2_conti_full = chi2 / (len(resid) - len(pdict))
             
         # residuals on main panel
