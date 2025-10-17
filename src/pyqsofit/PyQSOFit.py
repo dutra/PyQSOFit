@@ -169,7 +169,7 @@ class QSOFit():
     def Fit(self, name=None, nsmooth=1, and_mask=False, or_mask=False, reject_badpix=True, deredden=True,
             wave_range=None,
             wave_mask=None, decompose_host=True, host_prior=False, host_prior_scale=0.2, host_line_mask=True,
-            decomp_na_mask=False,
+            decomp_na_mask=False, f_scale=1.0,
             qso_type='global', npca_qso=10, host_type='BC03', npca_gal=5, Fe_uv_op=True,
             poly=False, BC=False, rej_abs_conti=False, rej_abs_line=False, initial_guess=None,
             n_pix_min_conti=100, param_file_name='qsopar.fits', MC=False, MCMC=False, save_fits_name=None,
@@ -456,6 +456,7 @@ class QSOFit():
         self.qso_type = qso_type
         self.npca_gal = npca_gal
         self.npca_qso = npca_qso
+        self.f_scale = f_scale
         self.maxOLs = 10
         self.alpha = 0.05
         self.initial_guess = initial_guess
@@ -1020,7 +1021,7 @@ class QSOFit():
             calc_covar=False,
             xtol=getattr(self, "xtol_conti", 1e-8),
             ftol=getattr(self, "ftol_conti", 1e-8),
-            method='least_squares', loss='huber', f_scale=1.0
+            method='least_squares', loss='huber', f_scale=self.f_scale
         )
 
         # ---------- optional BAL trough rejection & SECOND PASS ----------
