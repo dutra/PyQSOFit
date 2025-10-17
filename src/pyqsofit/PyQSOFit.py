@@ -2500,7 +2500,7 @@ class QSOFit():
         # Interpolate back to original x grid
         bc_final = np.interp(loglam, loglam_uniform, bc_conv)
 
-        return bc_final * 1e-17
+        return bc_final * 1e-12
 
 
     def F_poly_conti(self, xval, pp, Rv=2.74):
