@@ -1144,7 +1144,9 @@ class QSOFit():
                         calc_covar=False,
                         xtol=getattr(self, "xtol_conti", 1e-8),
                         ftol=getattr(self, "ftol_conti", 1e-8),
+                        method='least_squares', loss='huber', f_scale=1.0
                     )
+
                     samples[k] = list(conti_fit_k.params.valuesdict().values())
             else:
                 raise RuntimeError("MCMC and MC modes are both True")
