@@ -1020,7 +1020,7 @@ class QSOFit():
             calc_covar=False,
             xtol=getattr(self, "xtol_conti", 1e-8),
             ftol=getattr(self, "ftol_conti", 1e-8),
-            method='least_squares', loss='huber', f_scale=1.345
+            method='least_squares', loss='huber', f_scale=1.0
         )
 
         # ---------- optional BAL trough rejection & SECOND PASS ----------
