@@ -1013,7 +1013,6 @@ class QSOFit():
             print("Fitting continuum (initial pass)…")
 
         # ---------- FIRST PASS ----------
-        print('Huber loss')
         conti_fit = minimize(
             self._residuals,
             fit_params,
@@ -1129,7 +1128,7 @@ class QSOFit():
                 
                 for k in range(nsamp):
                     flux_resampled = flux + rng.normal(0.0, 1.0, size=flux.size) * err
-                    fR_win = flux_resampled[in_any_window][ind_noBAL]
+                    fR_win = flux_resampled[ind_noBAL]
 
                     # small jitter to avoid identical starting points
                     pars_k = conti_fit.params.copy()
@@ -2231,7 +2230,6 @@ class QSOFit():
             # Calculate reduced chi2 of the residuals
             resid = self.flux_prereduced - total_on_pre
             chi2 = np.sum((resid / self.err_prereduced) ** 2)
-            print("pdict ", len(pdict))
             self.redchi2_conti_full = chi2 / (len(resid) - len(pdict))
             
         # residuals on main panel
