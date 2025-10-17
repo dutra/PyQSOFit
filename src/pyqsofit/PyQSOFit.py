@@ -949,18 +949,21 @@ class QSOFit():
         uv_mask = (w_win > 1200.0) & (w_win < 3500.0)
         uv_ok = int(np.count_nonzero(uv_mask)) > getattr(self, "n_pix_min_conti", 20)
         if not (getattr(self, "Fe_uv_op", True) and uv_ok):
+            print("UV FeII component disabled due to insufficient coverage.")
             _freeze("Fe_uv_norm", ["Fe_uv_norm", "Fe_uv_FWHM", "Fe_uv_shift"])
 
         # Optical FeII region
         op_mask = (w_win > 3686.0) & (w_win < 7484.0)
         op_ok = int(np.count_nonzero(op_mask)) > getattr(self, "n_pix_min_conti", 20)
         if not (getattr(self, "Fe_uv_op", True) and op_ok):
+            print("Optical FeII component disabled due to insufficient coverage.")
             _freeze("Fe_op_norm", ["Fe_op_norm", "Fe_op_FWHM", "Fe_op_shift"])
 
         # Balmer continuum (blueward of 3646 Å)
         bc_mask = (w_win < 3646.0)
         bc_ok = int(np.count_nonzero(bc_mask)) > 100
         if not (getattr(self, "BC", True) and bc_ok):
+            print("Balmer continuum component disabled due to insufficient coverage.")
             _freeze("Balmer_norm", ["Balmer_norm", "Balmer_Te", "Balmer_Tau", "Balmer_vel"])
 
         # Polynomial component
@@ -1013,6 +1016,8 @@ class QSOFit():
             fit_params.pretty_print()
             print("Fitting continuum (initial pass)…")
 
+        f_scale = self.f_scale
+
         # ---------- FIRST PASS ----------
         conti_fit = minimize(
             self._residuals,
@@ -1021,24 +1026,28 @@ class QSOFit():
             calc_covar=False,
             xtol=getattr(self, "xtol_conti", 1e-8),
             ftol=getattr(self, "ftol_conti", 1e-8),
-            method='least_squares', loss='huber', f_scale=self.f_scale
+            method='least_squares', loss='huber', f_scale=f_scale
         )
 
         # ---------- optional BAL trough rejection & SECOND PASS ----------
         params_dict = conti_fit.params.valuesdict()
         if getattr(self, "rej_abs_conti", True):
-            model_win = _conti_model(w_win, conti_fit.params)
-            ind_noBAL = ~(((f_win < model_win - 3.0 * e_win) & (w_win < 3500.0)))
-            # If you *really* want smoothing, uncomment the next line (can bias fits):
-            # f_refit = self.Smooth(f_win[ind_noBAL], 10)
-            f_refit = f_win[ind_noBAL]
+            #model_win = _conti_model(w_win, conti_fit.params)
+
+            res = conti_fit.residual
+            mad = np.median(np.abs(res - np.median(res)))
+            s_hat = 1.4826 * mad              # robust sigma
+            f_scale = float(np.clip(1.345 * s_hat, 0.8, 4.0))  # Rule A
+            print(f"Robust scale factor: {f_scale}")
+
             conti_fit = minimize(
                 self._residuals,
                 conti_fit.params,
-                args=(w_win[ind_noBAL], f_refit, e_win[ind_noBAL], _conti_model),
+                args=(w_win, f_win, e_win, _conti_model),
                 calc_covar=False,
                 xtol=getattr(self, "xtol_conti", 1e-8),
                 ftol=getattr(self, "ftol_conti", 1e-8),
+                method='least_squares', loss='huber', f_scale=f_scale
             )
             params_dict = conti_fit.params.valuesdict()
         else:
@@ -1145,7 +1154,7 @@ class QSOFit():
                         calc_covar=False,
                         xtol=getattr(self, "xtol_conti", 1e-8),
                         ftol=getattr(self, "ftol_conti", 1e-8),
-                        method='least_squares', loss='huber', f_scale=1.0
+                        method='least_squares', loss='huber', f_scale=f_scale
                     )
 
                     samples[k] = list(conti_fit_k.params.valuesdict().values())
