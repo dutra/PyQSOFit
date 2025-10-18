@@ -990,6 +990,15 @@ class QSOFit():
                 y *= self.F_poly_conti(x, pd)
             return y
 
+        def _conti_model_no_Fe(x, p):
+            pd = p.valuesdict()
+            y = self.PL(x, pd)
+            if getattr(self, "BC", True):
+                y += self.Balmer_conti(x, pd)
+            if getattr(self, "poly", True):
+                y *= self.F_poly_conti(x, pd)
+            return y
+
         # ---------- tiny helpers used below ----------
         def _vec_to_dict(vec, names):
             return {nm: float(v) for nm, v in zip(names, vec)}
@@ -1026,7 +1035,7 @@ class QSOFit():
         conti_fit = minimize(
             self._residuals,
             fit_params,
-            args=(w_win, f_win, e_win, _conti_model),
+            args=(w_win, f_win, e_win, _conti_model_no_Fe),
             calc_covar=False,
             xtol=getattr(self, "xtol_conti", 1e-8),
             ftol=getattr(self, "ftol_conti", 1e-8),
