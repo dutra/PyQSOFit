@@ -936,6 +936,10 @@ class QSOFit():
         if getattr(self, "verbose", False):
             print("Parameters loaded:", list(param_names))
 
+        # Force PL_slope_blue > PL_slope_red
+        fit_params.add('PL_delta', value=5, min=0)   # ensures delta ≥ 0
+        fit_params["PL_slope_red"].expr = "PL_slope_blue + abs(PL_delta)"
+
         # ---------- helper: freeze a component quickly ----------
         def _freeze(norm_name, names):
             if norm_name in fit_params:
@@ -2500,7 +2504,7 @@ class QSOFit():
         # Interpolate back to original x grid
         bc_final = np.interp(loglam, loglam_uniform, bc_conv)
 
-        return bc_final * 1e-12
+        return bc_final * 1e-14
 
 
     def F_poly_conti(self, xval, pp, Rv=2.74):
