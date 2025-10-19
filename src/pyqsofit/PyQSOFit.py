@@ -940,6 +940,11 @@ class QSOFit():
         fit_params.add('PL_delta', value=5, min=0)   # ensures delta ≥ 0
         fit_params["PL_slope_red"].expr = "PL_slope_blue + abs(PL_delta)"
 
+        # ---------- tie Fe_uv_FWHM and Fe_op_FWHM ----------
+        # If both parameters exist, tie Fe_op_FWHM to Fe_uv_FWHM (e.g., Fe_op_FWHM = Fe_uv_FWHM)
+        fit_params["Fe_op_FWHM"].expr = "Fe_uv_FWHM"
+        fit_params["Fe_uv_norm"].expr = "Fe_op_norm"
+
         # ---------- helper: freeze a component quickly ----------
         def _freeze(norm_name, names):
             if norm_name in fit_params:
@@ -2254,10 +2259,9 @@ class QSOFit():
             ax.axhline(0, color="black", linestyle="--", linewidth=1)
             # Calculate reduced chi2 of the residuals
             resid = self.flux_prereduced - total_on_pre
-            mask = resid < 3 * self.err_prereduced # Mask absorption lines in chi2 calculation
-            chi2 = np.sum((resid[mask] / self.err_prereduced[mask]) ** 2)
-            self.redchi2_conti_full = chi2 / (len(resid[mask]) - len(pdict))
-
+            chi2 = np.sum((resid / self.err_prereduced) ** 2)
+            self.redchi2_conti_full = chi2 / (len(resid) - len(pdict))
+            
         # residuals on main panel
         #if plot_residual:
         #    if has_lines:
