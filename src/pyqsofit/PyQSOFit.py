@@ -97,6 +97,7 @@ from astropy import constants as const
 from astropy.cosmology import FlatLambdaCDM
 
 from astropy.modeling.physical_models import BlackBody
+from astropy.modeling import models
 
 from astropy.table import Table
 
@@ -2446,20 +2447,17 @@ class QSOFit():
             pp[10] = break location (x_break)
         """
         x0 = (np.max(xval) - np.min(xval))/2.0 + np.min(xval)  # pivot point for normalization
-        A = pp['PL_norm']
-        d1 = pp['PL_slope_blue']
-        d2 = pp['PL_slope_red']
-        ds = 0.1
-        x_break = pp['PL_break_wave']
+        x = xval / x0
 
-        x = xval / x_break
-        delta = d2 - d1
-        smooth_exp = 1.0 / ds
+        f = models.SmoothlyBrokenPowerLaw1D(
+            amplitude=pp['PL_norm'],
+            x_break=pp['PL_break_wave']/x0,
+            alpha_1=-pp['PL_slope_blue'],
+            alpha_2=-pp['PL_slope_red'],
+            delta=0.1
+        )
 
-        # Smooth broken power law normalized to A at x0
-        log_f = d1 * np.log10(x) + (delta / smooth_exp) * np.log1p(x**smooth_exp)
-        f = A * 10**(log_f - log_f[np.argmin(np.abs(xval - x0))])
-        return f
+        return f(xval/x0)
 
     def Balmer_conti(self, xval, pp):
         """
