@@ -1101,6 +1101,10 @@ class QSOFit():
         self.f_conti_model = total_m
         self.line_flux = flux - total_m
         self.PL_poly_BC = pl_m + poly_m + bc_m
+        iron_frac_all = (self.Fe_flux_mgii(wave, pd_best) + self.Fe_flux_balmer(wave, pd_best) + self.PL(wave, pd_best)) / self.PL(wave, pd_best)
+        # Interpolate iron_frac to 2500 Å
+        self.iron_frac = np.interp(2500, wave, iron_frac_all)
+        print(f"Iron to PL ratio at 2500A: {self.iron_frac:.3f}")
 
         # ---------- uncertainty estimation (MCMC / MC) ----------
         do_uncert = (getattr(self, "MCMC", False) or getattr(self, "MC", False)) and (getattr(self, "nsamp", 0) > 0)
