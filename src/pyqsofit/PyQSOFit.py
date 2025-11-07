@@ -2611,7 +2611,7 @@ class QSOFit():
             z = self.z
         cosmo = FlatLambdaCDM(H0=70, Om0=0.3)
         d_L = cosmo.luminosity_distance(z).to(u.cm).value  # unit cm
-        L = flux * 1e-17 * 4 * np.pi * d_L ** 2  # erg/s/A
+        L = flux * 1e-17 * 4 * np.pi * d_L ** 2 * (1+z) # erg/s/A
         return L
 
     def Onegauss(self, xval, pp):
