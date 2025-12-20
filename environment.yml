@@ -2,6 +2,7 @@ name: pyqsofit
 channels:
   - defaults
 dependencies:
+  - python=3.12.9
   - _libgcc_mutex=0.1
   - _openmp_mutex=5.1
   - anyio=4.7.0
@@ -296,4 +297,3 @@ dependencies:
       - sfdmap2==0.2.2.post3
       - speclite==0.20
       - uncertainties==3.2.3
-prefix: /opt/miniconda3/envs/pyqsofit
